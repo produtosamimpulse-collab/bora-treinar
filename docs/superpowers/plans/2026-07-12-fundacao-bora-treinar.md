@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Autenticação: Supabase Auth, login por email/senha (sem OAuth, sem cadastro público — usuário único hoje)
+- Autenticação: Supabase Auth, email/senha (sem OAuth). **Atualizado após a Fase 1:** cadastro público habilitado na própria tela de login (decisão revertida em relação ao brainstorming original) — o usuário preferiu poder criar a própria conta em vez de usar o dashboard do Supabase manualmente. Risco mitigado pelo RLS: cada conta só enxerga os próprios dados (nunca o CRM nem dados de outra conta), então uma conta extra criada por terceiros não vaza nada, só ocupa uma linha vazia em `auth.users`.
 - Banco: Postgres via **Supabase Cloud** (projeto hospedado, não local/Docker), schema versionado em `supabase/migrations/`
 - **Banco compartilhado:** o projeto Supabase (`miauzaadeykvjjwmjvnd`) já hospeda o CRM da AM Impulse (tabelas como `client_contracts`, `financial_records`, `colaboradores`) — é o mesmo projeto por decisão do usuário (evitar custo de um projeto pago). Regras por causa disso:
   - **Nunca** rodar `supabase db reset`, `drop table`, `truncate` ou qualquer comando destrutivo contra este projeto — só migrations aditivas via `supabase db push`
@@ -874,6 +874,138 @@ git commit -m "style: apply base color theme (light background, black text, aqua
 
 ---
 
+## Task 8: Cadastro de usuário na tela de login
+
+> **Contexto:** adicionado depois do fechamento original da Fase 1, a pedido do usuário — reverte a decisão de "sem cadastro público" do brainstorming (ver Global Constraints, atualizado). Sem isso, o único jeito de criar uma conta seria pelo dashboard do Supabase manualmente.
+
+**Files:**
+- Modify: `app/login/page.tsx`
+
+**Interfaces:**
+- Consumes: `createBrowserSupabaseClient()` de `lib/supabase/client.ts` (Task 5)
+- Produces: alternância entre "Entrar" e "Criar conta" na mesma página, usando `supabase.auth.signUp`
+
+- [ ] **Step 1: Reescrever `app/login/page.tsx` com os dois modos**
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createBrowserSupabaseClient } from '@/lib/supabase/client'
+
+type Mode = 'signin' | 'signup'
+
+export default function LoginPage() {
+  const [mode, setMode] = useState<Mode>('signin')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+  const router = useRouter()
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setInfo(null)
+
+    const supabase = createBrowserSupabaseClient()
+
+    if (mode === 'signup') {
+      const { data, error } = await supabase.auth.signUp({ email, password })
+
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      if (data.session) {
+        router.push('/')
+        router.refresh()
+        return
+      }
+
+      setInfo('Conta criada! Verifique seu email para confirmar antes de entrar.')
+      setMode('signin')
+      return
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      setError(error.message)
+      return
+    }
+
+    router.push('/')
+    router.refresh()
+  }
+
+  function toggleMode() {
+    setError(null)
+    setInfo(null)
+    setMode((current) => (current === 'signin' ? 'signup' : 'signin'))
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 p-6">
+        <h1 className="text-2xl font-semibold text-black">Bora Treinar!</h1>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full rounded border border-gray-300 p-2 text-black"
+          required
+        />
+        <input
+          type="password"
+          placeholder="Senha"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full rounded border border-gray-300 p-2 text-black"
+          minLength={6}
+          required
+        />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {info && <p className="text-sm text-green-700">{info}</p>}
+        <button
+          type="submit"
+          className="w-full rounded bg-brand p-2 font-medium text-black"
+        >
+          {mode === 'signin' ? 'Entrar' : 'Criar conta'}
+        </button>
+        <button
+          type="button"
+          onClick={toggleMode}
+          className="w-full text-sm text-gray-600 underline"
+        >
+          {mode === 'signin' ? 'Não tem conta? Criar uma' : 'Já tem conta? Entrar'}
+        </button>
+      </form>
+    </main>
+  )
+}
+```
+
+- [ ] **Step 2: Build para confirmar que compila**
+
+Run:
+```bash
+npm run build
+```
+Expected: `Compiled successfully`.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add app/login/page.tsx
+git commit -m "feat: add signup toggle to login page"
+```
+
+---
+
 ## Fim da Fase 1
 
-Ao final desta fase: `npm run dev` sobe o app, `/login` autentica contra o Supabase local, rotas protegidas redirecionam sem sessão, o banco tem todas as tabelas do domínio, e o layout já usa a paleta definitiva. Isso é a base para a Fase 2 (biblioteca de exercícios).
+Ao final desta fase: `npm run dev` sobe o app, `/login` autentica e cadastra contra o Supabase Cloud, rotas protegidas redirecionam sem sessão, o banco tem todas as tabelas do domínio, e o layout já usa a paleta definitiva. Isso é a base para a Fase 2 (biblioteca de exercícios).
