@@ -12,6 +12,10 @@
 
 - Autenticação: Supabase Auth, login por email/senha (sem OAuth, sem cadastro público — usuário único hoje)
 - Banco: Postgres via **Supabase Cloud** (projeto hospedado, não local/Docker), schema versionado em `supabase/migrations/`
+- **Banco compartilhado:** o projeto Supabase (`miauzaadeykvjjwmjvnd`) já hospeda o CRM da AM Impulse (tabelas como `client_contracts`, `financial_records`, `colaboradores`) — é o mesmo projeto por decisão do usuário (evitar custo de um projeto pago). Regras por causa disso:
+  - **Nunca** rodar `supabase db reset`, `drop table`, `truncate` ou qualquer comando destrutivo contra este projeto — só migrations aditivas via `supabase db push`
+  - Toda tabela nova do Bora Treinar! deve ter Row Level Security (RLS) habilitada, isolando os dados por dono (`auth.uid()`), já que a mesma anon/service_role key é usada pelos dois sistemas
+  - Nomes de tabela não podem colidir com os já existentes no schema `public` (checar antes de criar: `agency_expenses`, `alerts`, `anuncios`, `aprovacao_comentarios`, `aprovacoes`, `arquivos`, `avisos`, `calendario`, `client_contracts`, `cliente_servicos`, `colaboradores`, `controle_acesso_checktruck`, `crm`, `financial_records`, `metricas_mensais`, `onboarding`, `posts`, `profiles`, `tarefas`)
 - Deploy: Vercel
 - Paleta visual: fundo claro (`#FFFFFF` / `#F7FAF9`), texto preto (`#0A0A0A`), cor de destaque verde água (`#2DD4BF`)
 - Sem nutrição, sem multi-tenant/billing, sem wearables, sem fotos de progresso (fora de escopo do produto inteiro, não só desta fase)
@@ -401,6 +405,65 @@ create table body_metric (
   weight_kg numeric(5,2),
   measurements jsonb
 );
+
+-- Row Level Security: este projeto Supabase é compartilhado com o CRM da
+-- AM Impulse (mesma anon/service_role key). Toda tabela nova do Bora
+-- Treinar! fica isolada por dono via RLS, mesmo compartilhando o projeto.
+
+alter table profile enable row level security;
+create policy "profile_owner" on profile
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+alter table exercise enable row level security;
+create policy "exercise_read_authenticated" on exercise
+  for select using (auth.role() = 'authenticated');
+
+alter table training_plan enable row level security;
+create policy "training_plan_owner" on training_plan
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+alter table workout_day enable row level security;
+create policy "workout_day_owner" on workout_day
+  for all using (
+    exists (
+      select 1 from training_plan
+      where training_plan.id = workout_day.training_plan_id
+      and training_plan.user_id = auth.uid()
+    )
+  );
+
+alter table workout_day_exercise enable row level security;
+create policy "workout_day_exercise_owner" on workout_day_exercise
+  for all using (
+    exists (
+      select 1 from workout_day
+      join training_plan on training_plan.id = workout_day.training_plan_id
+      where workout_day.id = workout_day_exercise.workout_day_id
+      and training_plan.user_id = auth.uid()
+    )
+  );
+
+alter table workout_session enable row level security;
+create policy "workout_session_owner" on workout_session
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+alter table workout_session_set enable row level security;
+create policy "workout_session_set_owner" on workout_session_set
+  for all using (
+    exists (
+      select 1 from workout_session
+      where workout_session.id = workout_session_set.workout_session_id
+      and workout_session.user_id = auth.uid()
+    )
+  );
+
+alter table monthly_checkin enable row level security;
+create policy "monthly_checkin_owner" on monthly_checkin
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+alter table body_metric enable row level security;
+create policy "body_metric_owner" on body_metric
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 ```
 
 - [ ] **Step 5: Aplicar a migration no projeto remoto**
