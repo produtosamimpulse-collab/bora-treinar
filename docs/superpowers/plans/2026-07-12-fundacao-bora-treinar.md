@@ -4,14 +4,14 @@
 
 **Goal:** Ter o esqueleto do app "Bora Treinar!" rodando localmente: projeto Next.js configurado, schema completo do banco no Supabase, autenticação por email/senha funcionando, e o tema visual (fundo claro, texto preto, detalhes verde água) aplicado no layout base.
 
-**Architecture:** Next.js (App Router, TypeScript) hospedado na Vercel, com Supabase como banco Postgres + Auth. Testes com Vitest rodando contra uma instância local do Supabase (via `supabase start`, que usa Docker). Migrations SQL versionadas em `supabase/migrations/`.
+**Architecture:** Next.js (App Router, TypeScript) hospedado na Vercel, com Supabase como banco Postgres + Auth. Testes com Vitest rodando contra o projeto Supabase Cloud (hospedado) linkado via CLI — não local/Docker (revisto após a Task 3: a máquina de desenvolvimento não tinha espaço em disco para o stack local do Supabase). Migrations SQL versionadas em `supabase/migrations/` e aplicadas via `supabase db push`.
 
 **Tech Stack:** Next.js 15 (App Router), TypeScript, Tailwind CSS, Supabase (`@supabase/supabase-js`, `@supabase/ssr`), Supabase CLI, Vitest.
 
 ## Global Constraints
 
 - Autenticação: Supabase Auth, login por email/senha (sem OAuth, sem cadastro público — usuário único hoje)
-- Banco: Postgres via Supabase, schema versionado em `supabase/migrations/`
+- Banco: Postgres via **Supabase Cloud** (projeto hospedado, não local/Docker), schema versionado em `supabase/migrations/`
 - Deploy: Vercel
 - Paleta visual: fundo claro (`#FFFFFF` / `#F7FAF9`), texto preto (`#0A0A0A`), cor de destaque verde água (`#2DD4BF`)
 - Sem nutrição, sem multi-tenant/billing, sem wearables, sem fotos de progresso (fora de escopo do produto inteiro, não só desta fase)
@@ -136,77 +136,103 @@ git commit -m "chore: configure Vitest test runner"
 
 ---
 
-## Task 3: Inicializar Supabase local
+## Task 3: Conectar a um projeto Supabase Cloud
+
+> **Nota de implementação (atualizado após tentativa da Task 3):** a máquina de desenvolvimento não tem espaço em disco suficiente para rodar o Supabase local via Docker (`supabase start` falhou por disco cheio, e o Docker Desktop ficou instável). Em vez de Supabase local, este projeto usa um projeto Supabase Cloud (hospedado) desde o início do desenvolvimento — sem dependência de Docker. Os Steps 1-2 abaixo (instalar CLI, `supabase init`) já foram concluídos numa tentativa anterior e não precisam ser refeitos; o `git status` confirma `package.json`/`package-lock.json` modificados e a pasta `supabase/` (com `config.toml`) já presente e não commitada.
+>
+> **Pré-requisito humano (feito fora deste plano, no navegador):** um projeto foi criado em https://supabase.com/dashboard (nome `bora-treinar`), com a senha do banco definida na criação. As credenciais (Project URL, anon key, service_role key, connection string) foram fornecidas pelo usuário para uso nos passos abaixo.
 
 **Files:**
-- Create: `supabase/config.toml` (gerado pelo CLI), `.env.local`, `.env.test`
-- Modify: `.gitignore` (garantir que `.env.local` e `.env.test` não sejam commitados)
+- Create (já feito): `supabase/config.toml`, `supabase/.gitignore` (gerados pelo CLI)
+- Create: `.env.local`, `.env.test`
+- Modify: `vitest.config.ts` (carregar `.env.test`)
 
 **Interfaces:**
-- Consumes: nenhum
-- Produces: instância local do Supabase rodando (Postgres + Auth), acessível via URL/keys salvas em `.env.local`
+- Consumes: credenciais do projeto Supabase Cloud (fornecidas pelo usuário)
+- Produces: CLI linkada ao projeto remoto; `.env.local`/`.env.test` com `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`; `vitest.config.ts` carregando `.env.test` para todos os testes (usado a partir do Task 4)
 
-- [ ] **Step 1: Instalar Supabase CLI como dependência de dev**
+- [x] **Step 1: Instalar Supabase CLI como dependência de dev** — já feito (`npm install -D supabase`)
 
-Run:
-```bash
-npm install -D supabase
-```
-Expected: instala sem erro.
+- [x] **Step 2: Inicializar o projeto Supabase** — já feito (`npx supabase init`, criou `supabase/config.toml`)
 
-- [ ] **Step 2: Inicializar o projeto Supabase**
+- [ ] **Step 3: Autenticar a CLI do Supabase**
 
 Run:
 ```bash
-npx supabase init
+npx supabase login
 ```
-Expected: cria a pasta `supabase/` com `config.toml`.
+Expected: abre o navegador para autenticar e imprime confirmação de login. (Alternativa não-interativa, se preferir: gerar um access token em https://supabase.com/dashboard/account/tokens e rodar `npx supabase login --token <TOKEN>`.)
 
-- [ ] **Step 3: Subir o Supabase local (requer Docker Desktop instalado e aberto)**
+- [ ] **Step 4: Linkar o projeto remoto**
+
+O `project-ref` aparece na URL do dashboard do projeto: `https://supabase.com/dashboard/project/<PROJECT_REF>`.
 
 Run:
 ```bash
-npx supabase start
+npx supabase link --project-ref <PROJECT_REF>
 ```
-Expected: baixa as imagens Docker (pode demorar na primeira vez) e imprime uma tabela com `API URL`, `anon key`, `service_role key`.
+Expected: pede a senha do banco (definida na criação do projeto) e confirma o link com `Finished supabase link`.
 
-- [ ] **Step 4: Salvar as credenciais locais**
+- [ ] **Step 5: Salvar as credenciais em `.env.local` e `.env.test`**
 
-Criar `.env.local` na raiz com os valores impressos no passo anterior:
+Em Project Settings → Data API, copiar a Project URL e a anon public key. Em Project Settings → API Keys, copiar a service_role key. Em Project Settings → Database → Connection string, copiar a URI no modo "Session pooler".
+
+Criar `.env.local` na raiz:
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=<API URL do output>
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key do output>
-SUPABASE_SERVICE_ROLE_KEY=<service_role key do output>
+NEXT_PUBLIC_SUPABASE_URL=<Project URL>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon public key>
+SUPABASE_SERVICE_ROLE_KEY=<service_role key>
 ```
 
-Criar `.env.test` com os mesmos valores (usado pelos testes de schema no Task 4):
+Criar `.env.test` na raiz (usado pelos testes a partir do Task 4):
 ```bash
-SUPABASE_URL=<API URL do output>
-SUPABASE_SERVICE_ROLE_KEY=<service_role key do output>
+SUPABASE_URL=<Project URL>
+SUPABASE_SERVICE_ROLE_KEY=<service_role key>
+SUPABASE_DB_URL=<connection string URI, modo Session pooler>
 ```
 
-- [ ] **Step 5: Garantir que os `.env*` locais não vão pro git**
+- [ ] **Step 6: Garantir que os `.env*` locais não vão pro git**
 
-Confirmar que `.gitignore` contém as linhas:
-```
-.env.local
-.env.test
-```
-(o `create-next-app` já adiciona `.env*.local` por padrão — adicionar `.env.test` manualmente se não estiver coberto.)
+Confirmar que `.gitignore` contém a linha `.env*` (já existe, adicionada pelo `create-next-app` — nenhuma alteração deveria ser necessária; se não existir, adicionar `.env.local` e `.env.test` explicitamente).
 
-- [ ] **Step 6: Confirmar que a instância está no ar**
+- [ ] **Step 7: Carregar `.env.test` no Vitest**
 
 Run:
 ```bash
-npx supabase status
+npm install -D dotenv
 ```
-Expected: lista os serviços (`API URL`, `DB URL`, `Studio URL`, etc.) com status ativo.
 
-- [ ] **Step 7: Commit**
+Modify `vitest.config.ts` para ler o `.env.test` antes de qualquer teste:
+```typescript
+import { defineConfig } from 'vitest/config'
+import react from '@vitejs/plugin-react'
+import tsconfigPaths from 'vite-tsconfig-paths'
+import { config } from 'dotenv'
+
+config({ path: '.env.test' })
+
+export default defineConfig({
+  plugins: [tsconfigPaths(), react()],
+  test: {
+    environment: 'node',
+    globals: true,
+  },
+})
+```
+
+- [ ] **Step 8: Confirmar a conexão com o projeto remoto**
+
+Run:
+```bash
+npx supabase migration list
+```
+Expected: imprime uma tabela comparando migrations locais vs. remotas (vazia dos dois lados neste ponto, já que ainda não criamos nenhuma) sem erro de conexão/autenticação. Um erro aqui indica credenciais erradas no link (Step 4) — não prosseguir sem essa confirmação.
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add supabase/config.toml .gitignore
-git commit -m "chore: initialize local Supabase instance"
+git add supabase/config.toml supabase/.gitignore vitest.config.ts package.json package-lock.json
+git commit -m "chore: connect project to Supabase Cloud"
 ```
 
 ---
@@ -218,8 +244,8 @@ git commit -m "chore: initialize local Supabase instance"
 - Test: `lib/supabase/schema.test.ts`
 
 **Interfaces:**
-- Consumes: instância Supabase local do Task 3 (`.env.test`)
-- Produces: tabelas `profile`, `exercise`, `training_plan`, `workout_day`, `workout_day_exercise`, `workout_session`, `workout_session_set`, `monthly_checkin`, `body_metric` no Postgres
+- Consumes: projeto Supabase Cloud linkado no Task 3 (`.env.test`, variável `SUPABASE_DB_URL`), `vitest.config.ts` já carregando `.env.test`
+- Produces: tabelas `profile`, `exercise`, `training_plan`, `workout_day`, `workout_day_exercise`, `workout_session`, `workout_session_set`, `monthly_checkin`, `body_metric` no Postgres remoto
 
 - [ ] **Step 1: Instalar cliente Postgres para o teste de schema**
 
@@ -249,9 +275,12 @@ const EXPECTED_TABLES = [
 
 describe('database schema', () => {
   it('creates all expected tables', async () => {
-    const client = new Client({
-      connectionString: 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
-    })
+    const connectionString = process.env.SUPABASE_DB_URL
+    if (!connectionString) {
+      throw new Error('Missing SUPABASE_DB_URL — check .env.test')
+    }
+
+    const client = new Client({ connectionString })
     await client.connect()
 
     const result = await client.query(
@@ -374,13 +403,13 @@ create table body_metric (
 );
 ```
 
-- [ ] **Step 5: Aplicar a migration**
+- [ ] **Step 5: Aplicar a migration no projeto remoto**
 
 Run:
 ```bash
-npx supabase db reset
+npx supabase db push
 ```
-Expected: reseta o banco local e aplica todas as migrations em `supabase/migrations/`, terminando com `Finished supabase db reset`.
+Expected: aplica `supabase/migrations/20260712000000_initial_schema.sql` ao projeto remoto linkado no Task 3, terminando com `Finished supabase db push`. Se pedir confirmação, confirmar.
 
 - [ ] **Step 6: Rodar o teste e confirmar que passa**
 
@@ -393,7 +422,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/migrations/20260712000000_initial_schema.sql lib/supabase/schema.test.ts package.json
+git add supabase/migrations/20260712000000_initial_schema.sql lib/supabase/schema.test.ts package.json package-lock.json
 git commit -m "feat: add initial database schema migration"
 ```
 
@@ -473,32 +502,9 @@ export function createBrowserSupabaseClient(): SupabaseClient {
 }
 ```
 
-- [ ] **Step 6: Carregar `.env.test` no Vitest**
+- [ ] **Step 6: Rodar e confirmar que passa**
 
-Modify `vitest.config.ts` para ler o `.env.test`:
-```typescript
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-import tsconfigPaths from 'vite-tsconfig-paths'
-import { config } from 'dotenv'
-
-config({ path: '.env.test' })
-
-export default defineConfig({
-  plugins: [tsconfigPaths(), react()],
-  test: {
-    environment: 'node',
-    globals: true,
-  },
-})
-```
-
-Run:
-```bash
-npm install -D dotenv
-```
-
-- [ ] **Step 7: Rodar e confirmar que passa**
+`.env.test` já é carregado pelo `vitest.config.ts` desde o Task 3 — não é necessário nenhum passo extra de configuração aqui.
 
 Run:
 ```bash
@@ -506,10 +512,10 @@ npm test
 ```
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add lib/supabase/client.ts lib/supabase/server.ts lib/supabase/client.test.ts vitest.config.ts package.json
+git add lib/supabase/client.ts lib/supabase/server.ts lib/supabase/client.test.ts package.json package-lock.json
 git commit -m "feat: add typed Supabase browser and server clients"
 ```
 
