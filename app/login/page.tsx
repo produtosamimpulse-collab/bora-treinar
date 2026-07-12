@@ -27,7 +27,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-white">
+    <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 p-6">
         <h1 className="text-2xl font-semibold text-black">Bora Treinar!</h1>
         <input
@@ -49,7 +49,7 @@ export default function LoginPage() {
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           type="submit"
-          className="w-full rounded bg-[#2DD4BF] p-2 font-medium text-black"
+          className="w-full rounded bg-brand p-2 font-medium text-black"
         >
           Entrar
         </button>

@@ -29,6 +29,24 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Testing
+
+Run tests with:
+
+```bash
+npm test
+```
+
+Two test files (`lib/supabase/schema.test.ts` and `lib/supabase/client.test.ts`) are **live integration tests** that run against the linked Supabase Cloud project — they are not mocked and require network access plus real credentials.
+
+Before running `npm test`, populate `.env.test` in the project root with:
+
+- `SUPABASE_URL` — the Project URL of the linked Supabase Cloud project (Project Settings → Data API).
+- `SUPABASE_SERVICE_ROLE_KEY` — the service_role key for that project (Project Settings → API Keys). Bypasses Row Level Security, so keep this out of version control.
+- `SUPABASE_DB_URL` — the Postgres connection string (Session pooler mode) for that project (Project Settings → Database → Connection string).
+
+Without `.env.test` populated, `npm test` will fail on these two files.
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.

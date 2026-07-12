@@ -587,12 +587,14 @@ git commit -m "feat: add typed Supabase browser and server clients"
 ## Task 6: Autenticação por email/senha
 
 **Files:**
-- Create: `app/login/page.tsx`, `lib/supabase/middleware.ts`, `middleware.ts`
+- Create: `app/login/page.tsx`, `lib/supabase/middleware.ts`, `proxy.ts`
 - Test: `lib/supabase/middleware.test.ts`
 
 **Interfaces:**
 - Consumes: `createBrowserSupabaseClient` e `createServerSupabaseClient` do Task 5
-- Produces: rota `/login` funcional; `middleware.ts` protegendo todas as rotas exceto `/login`
+- Produces: rota `/login` funcional; `proxy.ts` protegendo todas as rotas exceto `/login`
+
+> **Nota de implementação (atualizado após a Task 6):** o Next.js 16 renomeou a convenção de `middleware.ts`/função `middleware()` para `proxy.ts`/função `proxy()`, e a API de cookies do `@supabase/ssr` usada aqui trocou os métodos `get`/`set`/`remove` pelos métodos em lote `getAll`/`setAll`. Os passos e trechos de código abaixo já refletem o que foi de fato implementado.
 
 - [ ] **Step 1: Escrever teste da função que decide se a rota precisa de auth (falhando)**
 
@@ -639,15 +641,15 @@ npm test
 ```
 Expected: PASS.
 
-- [ ] **Step 5: Implementar o `middleware.ts` na raiz do projeto**
+- [ ] **Step 5: Implementar o `proxy.ts` na raiz do projeto**
 
 ```typescript
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { isPublicPath } from './lib/supabase/middleware'
 
-export async function middleware(request: NextRequest) {
-  const response = NextResponse.next()
+export async function proxy(request: NextRequest) {
+  let response = NextResponse.next({ request })
 
   if (isPublicPath(request.nextUrl.pathname)) {
     return response
@@ -658,14 +660,21 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get: (name) => request.cookies.get(name)?.value,
-        set: (name, value, options) => response.cookies.set(name, value, options),
-        remove: (name, options) => response.cookies.set(name, '', options),
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          response = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          )
+        },
       },
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
@@ -755,7 +764,7 @@ Expected: `Compiled successfully`.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add middleware.ts lib/supabase/middleware.ts lib/supabase/middleware.test.ts app/login/page.tsx
+git add proxy.ts lib/supabase/middleware.ts lib/supabase/middleware.test.ts app/login/page.tsx
 git commit -m "feat: add email/password authentication with route protection"
 ```
 
