@@ -694,37 +694,90 @@ git commit -m "feat: add email/password authentication with route protection"
 
 ## Task 7: Tema visual base (fundo claro, texto preto, verde água)
 
+> **Nota de implementação (atualizado após revisão da Task 1):** este projeto usa Tailwind CSS v4, que não tem `tailwind.config.ts` — a configuração de tema é feita inline via o bloco `@theme` dentro de `app/globals.css`. Os passos abaixo foram ajustados para esse modelo.
+
 **Files:**
-- Modify: `tailwind.config.ts`, `app/layout.tsx`, `app/globals.css`
+- Modify: `app/globals.css`, `app/layout.tsx`
 
 **Interfaces:**
 - Consumes: nenhum
-- Produces: token de cor `brand` (`#2DD4BF`) disponível em `tailwind.config.ts` como `bg-brand`, `text-brand`, `border-brand`
+- Produces: token de cor `--color-brand` (`#2DD4BF`) no `@theme inline` de `app/globals.css`, disponível como `bg-brand`, `text-brand`, `border-brand`
 
-- [ ] **Step 1: Adicionar a cor de marca no `tailwind.config.ts`**
+- [ ] **Step 1: Fixar a paleta clara e adicionar a cor de marca em `app/globals.css`**
 
-Modify `tailwind.config.ts`, dentro de `theme.extend.colors`:
-```typescript
-colors: {
-  brand: '#2DD4BF',
-  background: '#FFFFFF',
-  foreground: '#0A0A0A',
-},
-```
-
-- [ ] **Step 2: Aplicar fundo e texto padrão em `app/globals.css`**
-
-No topo de `app/globals.css`, garantir:
+`app/globals.css` atualmente é:
 ```css
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
 body {
-  background-color: #FFFFFF;
-  color: #0A0A0A;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
 }
 ```
 
+Substituir pelo conteúdo abaixo — remove o dark mode automático (o design pede fundo claro fixo, não adaptativo ao sistema) e adiciona o token `--color-brand`:
+```css
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --brand: #2dd4bf;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+```
+
+- [ ] **Step 2: Confirmar que a classe utilitária `bg-brand` compila**
+
+Temporariamente, em `app/page.tsx`, adicionar `<div className="bg-brand h-4 w-4" />` no topo do JSX retornado, só para validar a geração da utility class.
+
+Run:
+```bash
+npm run build
+```
+Expected: `Compiled successfully` (confirma que `bg-brand` foi reconhecida — se o build falhar reclamando de classe desconhecida, o token `--color-brand` não foi registrado corretamente no `@theme`).
+
+Remover o `<div>` de teste em seguida.
+
 - [ ] **Step 3: Ajustar `app/layout.tsx` para usar as classes base**
 
-Garantir que a tag `<body>` em `app/layout.tsx` tenha `className="bg-background text-foreground antialiased"`.
+Garantir que a tag `<body>` em `app/layout.tsx` tenha `bg-background text-foreground` nas classes (mantendo `min-h-full flex flex-col` já existentes):
+```tsx
+<body className="min-h-full flex flex-col bg-background text-foreground">{children}</body>
+```
 
 - [ ] **Step 4: Build para confirmar que compila**
 
@@ -737,7 +790,7 @@ Expected: `Compiled successfully`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tailwind.config.ts app/globals.css app/layout.tsx
+git add app/globals.css app/layout.tsx
 git commit -m "style: apply base color theme (light background, black text, aqua-green accent)"
 ```
 
