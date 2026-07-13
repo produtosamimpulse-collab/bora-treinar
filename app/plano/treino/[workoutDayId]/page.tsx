@@ -13,7 +13,7 @@ export default async function TreinoPage({
   const { data: day } = await supabase
     .from('workout_day')
     .select(
-      'id, day_label, rest_seconds, workout_day_exercise(id, target_sets, target_reps, target_load_kg, exercise(id, name, name_pt))'
+      'id, day_label, rest_seconds, workout_day_exercise(id, target_sets, target_reps, target_load_kg, target_rir, exercise(id, name, name_pt))'
     )
     .eq('id', workoutDayId)
     .single()
@@ -32,6 +32,7 @@ export default async function TreinoPage({
       target_sets: number
       target_reps: number
       target_load_kg: number | null
+      target_rir: string | null
       exercise: { id: string; name: string; name_pt: string | null }
     }>
   ).map((item) => ({
@@ -41,6 +42,7 @@ export default async function TreinoPage({
     targetSets: item.target_sets,
     targetReps: item.target_reps,
     targetLoadKg: item.target_load_kg,
+    targetRir: item.target_rir as string | null,
   }))
 
   return (

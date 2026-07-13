@@ -10,6 +10,7 @@ type Exercise = {
   targetSets: number
   targetReps: number
   targetLoadKg: number | null
+  targetRir: string | null
 }
 
 export default function ExecucaoGuiada({
@@ -112,6 +113,11 @@ export default function ExecucaoGuiada({
           Exercício {exerciseIndex + 1} de {exercises.length}, série {setNumber} de{' '}
           {currentExercise.targetSets}
         </p>
+        {currentExercise.targetRir && (
+          <p className="mt-1 text-xs uppercase tracking-widest text-brand">
+            RIR alvo: {currentExercise.targetRir}
+          </p>
+        )}
       </header>
 
       {resting ? (
