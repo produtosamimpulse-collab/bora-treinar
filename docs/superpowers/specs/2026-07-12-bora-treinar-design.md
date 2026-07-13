@@ -57,7 +57,7 @@ Tela de evolução com: gráfico de carga ao longo dos meses por exercício prin
 
 ## 9. Design visual
 
-Fundo claro, texto preto, detalhes/destaques em verde água. Visual limpo, estilo "app de saúde" — aplicado em botões primários, ícones de progresso, gráficos/barras e no timer de descanso durante o treino.
+**Atualizado após a Fase 2** — a paleta original (verde água `#2DD4BF`) foi substituída por verde-limão vibrante (`#C8FF00`, mesma cor da marca AM Impulse), com uma linguagem visual mais "premium/editorial": fundo claro, texto preto, tipografia de destaque grande e condensada em caixa alta (fonte Anton para títulos, Geist para o resto), cards com elevação (sombra suave, cantos arredondados, fundo levemente destacado do branco puro via token `surface`), glow/brilho radial sutil atrás de elementos centrais, e selos numerados (01, 02, 03...) marcando seções. Tokens Tailwind: `bg-background`, `text-foreground`, `bg-brand`/`text-brand`, `bg-surface`, `border-border-subtle`, fonte `font-display`.
 
 ## 10. Fora de escopo (por enquanto)
 
