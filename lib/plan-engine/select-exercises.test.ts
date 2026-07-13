@@ -3,10 +3,11 @@ import { selectExercisesForDay } from './select-exercises'
 
 function makeSupabaseMock(rows: { id: string; name: string }[]) {
   const limit = vi.fn().mockResolvedValue({ data: rows, error: null })
-  const inFilter = vi.fn().mockReturnValue({ limit })
+  const eqFilter = vi.fn().mockReturnValue({ limit })
+  const inFilter = vi.fn().mockReturnValue({ limit, eq: eqFilter })
   const select = vi.fn().mockReturnValue({ in: inFilter })
   const from = vi.fn().mockReturnValue({ select })
-  return { from } as never
+  return { from, select, inFilter, eqFilter, limit } as never
 }
 
 describe('selectExercisesForDay', () => {
@@ -25,6 +26,26 @@ describe('selectExercisesForDay', () => {
     )
 
     expect(supabase.from).toHaveBeenCalledWith('exercise')
+    expect(supabase.select).toHaveBeenCalledWith('id, name')
+    expect(supabase.inFilter).toHaveBeenCalledWith('target', ['chest', 'shoulders', 'triceps'])
+    expect(supabase.eqFilter).not.toHaveBeenCalled()
+    expect(supabase.limit).toHaveBeenCalledWith(2)
+    expect(result).toEqual(rows)
+  })
+
+  it('filters by equipment when an equipment filter is given', async () => {
+    const rows = [{ id: '1', name: 'Push-up' }]
+    const supabase = makeSupabaseMock(rows)
+
+    const result = await selectExercisesForDay(
+      supabase,
+      { label: 'Push', targets: ['chest'] },
+      'body weight',
+      3
+    )
+
+    expect(supabase.eqFilter).toHaveBeenCalledWith('equipment', 'body weight')
+    expect(supabase.limit).toHaveBeenCalledWith(3)
     expect(result).toEqual(rows)
   })
 
