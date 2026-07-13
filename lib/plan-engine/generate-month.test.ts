@@ -71,6 +71,12 @@ describe('generateFirstMonth', () => {
     expect(weekNumbers.filter((w) => w === 3)).toHaveLength(3)
     expect(weekNumbers.filter((w) => w === 4)).toHaveLength(3)
 
+    const weekdays = (supabase.insertedRows.workout_day as { day_of_week: number }[]).map(
+      (row) => row.day_of_week
+    )
+    // days_per_week: 3 -> assignWeekdays(3) = [1, 3, 5], repetido em cada uma das 4 semanas
+    expect(weekdays).toEqual([1, 3, 5, 1, 3, 5, 1, 3, 5, 1, 3, 5])
+
     // 12 workout_day rows * 2 exercises (per the mocked exercise query) = 24 rows
     const dayExercises = supabase.insertedRows.workout_day_exercise as {
       target_load_kg: number | null

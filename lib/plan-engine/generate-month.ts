@@ -3,6 +3,7 @@ import type { OnboardingProfile } from '../openai/client'
 import { chooseSplit } from './split'
 import { selectExercisesForDay } from './select-exercises'
 import { getVolumeForGoal } from './volume-table'
+import { assignWeekdays } from './weekdays'
 
 export async function generateFirstMonth(
   supabase: SupabaseClient,
@@ -11,6 +12,7 @@ export async function generateFirstMonth(
 ): Promise<{ trainingPlanId: string }> {
   const split = chooseSplit(profile.days_per_week)
   const volume = getVolumeForGoal(profile.goal)
+  const weekdays = assignWeekdays(profile.days_per_week)
 
   const referenceMonth = new Date()
   referenceMonth.setDate(1)
@@ -33,7 +35,9 @@ export async function generateFirstMonth(
   }
 
   for (let week = 1; week <= 4; week++) {
-    for (const day of split.days) {
+    for (let dayIndex = 0; dayIndex < split.days.length; dayIndex++) {
+      const day = split.days[dayIndex]
+
       const { data: workoutDay, error: dayError } = await supabase
         .from('workout_day')
         .insert([
@@ -41,6 +45,7 @@ export async function generateFirstMonth(
             training_plan_id: trainingPlan.id,
             week_number: week,
             day_label: day.label,
+            day_of_week: weekdays[dayIndex],
           },
         ])
         .select()
