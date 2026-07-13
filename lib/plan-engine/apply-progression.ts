@@ -7,7 +7,7 @@ export async function applyWeek1Progression(
 ): Promise<void> {
   const { data: week1Days } = await supabase
     .from('workout_day')
-    .select('id, day_label')
+    .select('id, day_of_week')
     .eq('training_plan_id', trainingPlanId)
     .eq('week_number', 1)
 
@@ -53,7 +53,7 @@ export async function applyWeek1Progression(
           .select('id')
           .eq('training_plan_id', trainingPlanId)
           .eq('week_number', week)
-          .eq('day_label', day.day_label)
+          .eq('day_of_week', day.day_of_week)
           .maybeSingle()
 
         if (!futureDay) {

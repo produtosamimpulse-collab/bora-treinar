@@ -13,24 +13,33 @@ type Row = Record<string, unknown>
  *
  * Decoy rows are deliberately seeded ahead of the "correct" rows in each
  * table so that an implementation missing a required `.eq()` filter (e.g.
- * forgetting to filter the future day by `day_label`, or the future exercise
- * by `order_index`) would pick up the wrong row and fail the assertions -
- * this keeps the test from being a tautology.
+ * forgetting to filter the future day by `day_of_week`, or the future
+ * exercise by `order_index`) would pick up the wrong row and fail the
+ * assertions - this keeps the test from being a tautology.
+ *
+ * Regression: every day here shares the SAME `day_label` ("Peito, Ombros e
+ * Tríceps"), mirroring a real 4+ day/week split where multiple days per week
+ * carry identical labels (e.g. upper_lower repeats "Pernas e Glúteos" twice,
+ * push_pull_legs repeats each label at 6+ days). day_label is NOT a safe
+ * disambiguator between days in the same week - only `day_of_week` is
+ * guaranteed unique per day (see lib/plan-engine/weekdays.ts). The decoy
+ * days below share the label but have a different `day_of_week`, so this
+ * test would fail if the implementation matched on day_label instead.
  */
 function makeSupabaseMock() {
   const tables: Record<string, Row[]> = {
     workout_day: [
-      { id: 'day-w1', training_plan_id: 'plan-1', week_number: 1, day_label: 'Peito, Ombros e Tríceps' },
+      { id: 'day-w1', training_plan_id: 'plan-1', week_number: 1, day_label: 'Peito, Ombros e Tríceps', day_of_week: 1 },
 
-      // week 2: decoy day with the wrong day_label, listed first
-      { id: 'day-w2-decoy', training_plan_id: 'plan-1', week_number: 2, day_label: 'Costas e Bíceps' },
-      { id: 'day-w2', training_plan_id: 'plan-1', week_number: 2, day_label: 'Peito, Ombros e Tríceps' },
+      // week 2: decoy day with the SAME label but the wrong day_of_week, listed first
+      { id: 'day-w2-decoy', training_plan_id: 'plan-1', week_number: 2, day_label: 'Peito, Ombros e Tríceps', day_of_week: 4 },
+      { id: 'day-w2', training_plan_id: 'plan-1', week_number: 2, day_label: 'Peito, Ombros e Tríceps', day_of_week: 1 },
 
-      { id: 'day-w3-decoy', training_plan_id: 'plan-1', week_number: 3, day_label: 'Costas e Bíceps' },
-      { id: 'day-w3', training_plan_id: 'plan-1', week_number: 3, day_label: 'Peito, Ombros e Tríceps' },
+      { id: 'day-w3-decoy', training_plan_id: 'plan-1', week_number: 3, day_label: 'Peito, Ombros e Tríceps', day_of_week: 4 },
+      { id: 'day-w3', training_plan_id: 'plan-1', week_number: 3, day_label: 'Peito, Ombros e Tríceps', day_of_week: 1 },
 
-      { id: 'day-w4-decoy', training_plan_id: 'plan-1', week_number: 4, day_label: 'Costas e Bíceps' },
-      { id: 'day-w4', training_plan_id: 'plan-1', week_number: 4, day_label: 'Peito, Ombros e Tríceps' },
+      { id: 'day-w4-decoy', training_plan_id: 'plan-1', week_number: 4, day_label: 'Peito, Ombros e Tríceps', day_of_week: 4 },
+      { id: 'day-w4', training_plan_id: 'plan-1', week_number: 4, day_label: 'Peito, Ombros e Tríceps', day_of_week: 1 },
     ],
     workout_day_exercise: [
       { id: 'wde-w1', workout_day_id: 'day-w1', exercise_id: 'ex-1', order_index: 0 },
