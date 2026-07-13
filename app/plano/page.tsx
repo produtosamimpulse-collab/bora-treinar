@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import PlanoInterativo from './PlanoInterativo'
 
 export default async function PlanoPage({
   searchParams,
@@ -19,10 +20,32 @@ export default async function PlanoPage({
 
   const { data: days } = await supabase
     .from('workout_day')
-    .select('id, day_label, week_number, workout_day_exercise(id, target_sets, target_reps, exercise(name))')
+    .select(
+      'id, day_label, day_of_week, week_number, workout_day_exercise(id, target_sets, target_reps, exercise(id, name, name_pt))'
+    )
     .eq('training_plan_id', id)
     .eq('week_number', 1)
-    .order('id')
+    .order('day_of_week')
+
+  const formattedDays = (days ?? []).map((day) => ({
+    id: day.id,
+    dayLabel: day.day_label,
+    dayOfWeek: day.day_of_week,
+    exercises: (
+      day.workout_day_exercise as unknown as Array<{
+        id: string
+        target_sets: number
+        target_reps: number
+        exercise: { id: string; name: string; name_pt: string | null }
+      }>
+    ).map((item) => ({
+      id: item.id,
+      exerciseId: item.exercise.id,
+      name: item.exercise.name_pt ?? item.exercise.name,
+      targetSets: item.target_sets,
+      targetReps: item.target_reps,
+    })),
+  }))
 
   return (
     <main className="min-h-screen bg-background px-6 py-10 text-foreground sm:px-10">
@@ -36,26 +59,7 @@ export default async function PlanoPage({
         </h1>
       </header>
 
-      {(days ?? []).map((day) => (
-        <section key={day.id} className="mb-8 rounded-2xl border border-border-subtle bg-surface p-6">
-          <h2 className="mb-4 font-display text-2xl uppercase">{day.day_label}</h2>
-          <ul className="space-y-2">
-            {(day.workout_day_exercise as unknown as Array<{
-              id: string
-              target_sets: number
-              target_reps: number
-              exercise: { name: string }
-            }>).map((item) => (
-              <li key={item.id} className="flex justify-between text-sm">
-                <span>{item.exercise.name}</span>
-                <span className="text-foreground/60">
-                  {item.target_sets}x{item.target_reps}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      <PlanoInterativo days={formattedDays} />
     </main>
   )
 }
