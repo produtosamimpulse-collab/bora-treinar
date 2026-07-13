@@ -2,12 +2,30 @@ import { describe, it, expect, vi } from 'vitest'
 import { selectExercisesForDay } from './select-exercises'
 
 function makeSupabaseMock(rows: { id: string; name: string }[]) {
-  const limit = vi.fn().mockResolvedValue({ data: rows, error: null })
-  const eqFilter = vi.fn().mockReturnValue({ limit })
-  const inFilter = vi.fn().mockReturnValue({ limit, eq: eqFilter })
-  const select = vi.fn().mockReturnValue({ in: inFilter })
+  const calls: { method: string; args: unknown[] }[] = []
+
+  const builder = {
+    in: (...args: unknown[]) => {
+      calls.push({ method: 'in', args })
+      return builder
+    },
+    not: (...args: unknown[]) => {
+      calls.push({ method: 'not', args })
+      return builder
+    },
+    eq: (...args: unknown[]) => {
+      calls.push({ method: 'eq', args })
+      return builder
+    },
+    limit: (...args: unknown[]) => {
+      calls.push({ method: 'limit', args })
+      return Promise.resolve({ data: rows, error: null })
+    },
+  }
+
+  const select = vi.fn().mockReturnValue(builder)
   const from = vi.fn().mockReturnValue({ select })
-  return { from, select, inFilter, eqFilter, limit } as never
+  return { from, select, calls } as never
 }
 
 describe('selectExercisesForDay', () => {
@@ -27,9 +45,12 @@ describe('selectExercisesForDay', () => {
 
     expect(supabase.from).toHaveBeenCalledWith('exercise')
     expect(supabase.select).toHaveBeenCalledWith('id, name')
-    expect(supabase.inFilter).toHaveBeenCalledWith('target', ['chest', 'shoulders', 'triceps'])
-    expect(supabase.eqFilter).not.toHaveBeenCalled()
-    expect(supabase.limit).toHaveBeenCalledWith(2)
+    expect(supabase.calls).toContainEqual({
+      method: 'in',
+      args: ['target', ['chest', 'shoulders', 'triceps']],
+    })
+    expect(supabase.calls.some((c) => c.method === 'eq')).toBe(false)
+    expect(supabase.calls).toContainEqual({ method: 'limit', args: [2] })
     expect(result).toEqual(rows)
   })
 
@@ -44,15 +65,37 @@ describe('selectExercisesForDay', () => {
       3
     )
 
-    expect(supabase.eqFilter).toHaveBeenCalledWith('equipment', 'body weight')
-    expect(supabase.limit).toHaveBeenCalledWith(3)
+    expect(supabase.calls).toContainEqual({
+      method: 'eq',
+      args: ['equipment', 'body weight'],
+    })
+    expect(supabase.calls).toContainEqual({ method: 'limit', args: [3] })
     expect(result).toEqual(rows)
   })
 
+  it('excludes exercises that require manual assistance or a towel', async () => {
+    const supabase = makeSupabaseMock([])
+
+    await selectExercisesForDay(supabase, { label: 'Push', targets: ['chest'] }, null, 5)
+
+    expect(supabase.calls).toContainEqual({
+      method: 'not',
+      args: ['equipment', 'in', '("assisted","assisted (towel)")'],
+    })
+    expect(supabase.calls).toContainEqual({
+      method: 'not',
+      args: ['name', 'ilike', '%towel%'],
+    })
+  })
+
   it('throws when the query returns an error', async () => {
-    const limit = vi.fn().mockResolvedValue({ data: null, error: { message: 'boom' } })
-    const inFilter = vi.fn().mockReturnValue({ limit })
-    const select = vi.fn().mockReturnValue({ in: inFilter })
+    const builder = {
+      in: () => builder,
+      not: () => builder,
+      eq: () => builder,
+      limit: () => Promise.resolve({ data: null, error: { message: 'boom' } }),
+    }
+    const select = vi.fn().mockReturnValue(builder)
     const from = vi.fn().mockReturnValue({ select })
     const supabase = { from } as never
 
