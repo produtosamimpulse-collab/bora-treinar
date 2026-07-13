@@ -8,11 +8,16 @@ type Exercise = {
 
 export default async function ExerciciosPage() {
   const supabase = createServerSupabaseClient()
-  const { data: exercises } = await supabase
+  const { data: exercises, error } = await supabase
     .from('exercise')
     .select('id, name, muscle_group')
     .order('muscle_group')
     .order('name')
+    .range(0, 1999) // catálogo tem ~1400 exercícios; sem isso o PostgREST trunca em 1000
+
+  if (error) {
+    console.error('Failed to load exercise library:', error)
+  }
 
   const grouped = (exercises ?? []).reduce<Record<string, Exercise[]>>((acc, exercise) => {
     const group = exercise.muscle_group
