@@ -25,8 +25,11 @@ function makeSupabaseMock() {
           }),
         }
       },
-      select: () => ({
-        in: () => ({
+      select: () => {
+        const exerciseQuery = {
+          in: () => exerciseQuery,
+          not: () => exerciseQuery,
+          eq: () => exerciseQuery,
           limit: async () => ({
             data: [
               { id: 'ex-1', name: 'Exercise 1' },
@@ -34,8 +37,9 @@ function makeSupabaseMock() {
             ],
             error: null,
           }),
-        }),
-      }),
+        }
+        return exerciseQuery
+      },
     }
   }
 
