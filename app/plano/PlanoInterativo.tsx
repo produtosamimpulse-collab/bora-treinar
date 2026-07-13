@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const WEEKDAY_NAMES: Record<number, string> = {
   1: 'Segunda',
@@ -76,15 +76,19 @@ export default function PlanoInterativo({
       } else {
         next.add(exerciseItemId)
       }
-
-      const allChecked = day.exercises.every((exercise) => next.has(exercise.id))
-      if (allChecked && !completedDayIds.has(day.id)) {
-        completeDay(day.id)
-      }
-
       return next
     })
   }
+
+  useEffect(() => {
+    for (const day of days) {
+      const allChecked = day.exercises.every((exercise) => checkedExerciseIds.has(exercise.id))
+      if (allChecked && !completedDayIds.has(day.id)) {
+        completeDay(day.id)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkedExerciseIds])
 
   async function swapExercise(workoutDayExerciseId: string) {
     setSwapping(workoutDayExerciseId)

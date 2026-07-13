@@ -16,11 +16,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: current, error: currentError } = await supabase
     .from('workout_day_exercise')
-    .select('id, workout_day_id, exercise_id, exercise:exercise_id(target)')
+    .select(
+      'id, workout_day_id, exercise_id, exercise:exercise_id(target), workout_day:workout_day_id(training_plan:training_plan_id(user_id))'
+    )
     .eq('id', id)
     .single()
 
   if (currentError || !current) {
+    return NextResponse.json({ error: 'Exercise not found' }, { status: 404 })
+  }
+
+  const ownerUserId = (
+    current.workout_day as unknown as { training_plan: { user_id: string } }
+  ).training_plan.user_id
+
+  if (ownerUserId !== userId) {
     return NextResponse.json({ error: 'Exercise not found' }, { status: 404 })
   }
 

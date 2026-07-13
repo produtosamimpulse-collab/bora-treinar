@@ -39,6 +39,18 @@ vi.mock('@/lib/supabase/server', () => ({
 
 import { POST } from './route'
 
+function makeCurrentRow(overrides?: { ownerUserId?: string }) {
+  return {
+    id: 'wde-1',
+    workout_day_id: 'day-1',
+    exercise_id: 'ex-1',
+    exercise: { target: 'pectorals' },
+    workout_day: {
+      training_plan: { user_id: overrides?.ownerUserId ?? 'user-1' },
+    },
+  }
+}
+
 describe('POST /api/workout-day-exercises/:id/swap', () => {
   beforeEach(() => {
     mockGetAuthenticatedUserId.mockReset()
@@ -59,9 +71,24 @@ describe('POST /api/workout-day-exercises/:id/swap', () => {
     expect(response.status).toBe(401)
   })
 
+  it('returns 404 when the workout_day_exercise belongs to a different user', async () => {
+    mockCurrentSingle.mockResolvedValue({
+      data: makeCurrentRow({ ownerUserId: 'someone-else' }),
+      error: null,
+    })
+
+    const response = await POST(new Request('http://localhost/api/workout-day-exercises/wde-1/swap', { method: 'POST' }), {
+      params: Promise.resolve({ id: 'wde-1' }),
+    })
+
+    expect(response.status).toBe(404)
+    expect(mockUsedSelect).not.toHaveBeenCalled()
+    expect(mockUpdateEq).not.toHaveBeenCalled()
+  })
+
   it('swaps to a different exercise with the same target', async () => {
     mockCurrentSingle.mockResolvedValue({
-      data: { id: 'wde-1', workout_day_id: 'day-1', exercise_id: 'ex-1', exercise: { target: 'pectorals' } },
+      data: makeCurrentRow(),
       error: null,
     })
     mockUsedSelect.mockResolvedValue({ data: [{ exercise_id: 'ex-1' }], error: null })
@@ -81,7 +108,7 @@ describe('POST /api/workout-day-exercises/:id/swap', () => {
 
   it('returns an error when no alternative exercise is available', async () => {
     mockCurrentSingle.mockResolvedValue({
-      data: { id: 'wde-1', workout_day_id: 'day-1', exercise_id: 'ex-1', exercise: { target: 'pectorals' } },
+      data: makeCurrentRow(),
       error: null,
     })
     mockUsedSelect.mockResolvedValue({ data: [{ exercise_id: 'ex-1' }], error: null })
