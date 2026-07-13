@@ -19,7 +19,7 @@ export default function Home() {
         </h1>
 
         <p className="mx-auto mt-6 max-w-md text-base text-foreground/70">
-          Treinos montados, acompanhados e ajustados por IA — mês a mês, do seu jeito.
+          Treinos montados, acompanhados e ajustados por IA, mês a mês, do seu jeito.
         </p>
 
         <a
