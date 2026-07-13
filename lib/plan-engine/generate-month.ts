@@ -1,8 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { OnboardingProfile } from '../openai/client'
 import { chooseSplit } from './split'
-import { selectExercisesForDay } from './select-exercises'
-import { getVolumeForGoal } from './volume-table'
+import { selectExercisesForWeek } from './weekly-selection'
+import { getVolumeForGoal, getWeeklyVolumeRange, getTargetRir } from './volume-table'
 import { assignWeekdays } from './weekdays'
 
 export async function generateFirstMonth(
@@ -12,7 +12,17 @@ export async function generateFirstMonth(
 ): Promise<{ trainingPlanId: string }> {
   const split = chooseSplit(profile.days_per_week)
   const volume = getVolumeForGoal(profile.goal)
+  const volumeRange = getWeeklyVolumeRange(profile.level)
+  const targetRir = getTargetRir(profile.level)
   const weekdays = assignWeekdays(profile.days_per_week)
+
+  const weekSelection = await selectExercisesForWeek(
+    supabase,
+    split.days,
+    profile.excluded_targets,
+    volumeRange,
+    volume.exercisesPerDay
+  )
 
   const referenceMonth = new Date()
   referenceMonth.setDate(1)
@@ -33,6 +43,8 @@ export async function generateFirstMonth(
   if (planError) {
     throw new Error(planError.message)
   }
+
+  const [minReps] = volume.reps.split('-').map(Number)
 
   for (let week = 1; week <= 4; week++) {
     for (let dayIndex = 0; dayIndex < split.days.length; dayIndex++) {
@@ -55,14 +67,7 @@ export async function generateFirstMonth(
         throw new Error(dayError.message)
       }
 
-      const exercises = await selectExercisesForDay(
-        supabase,
-        day,
-        null,
-        volume.exercisesPerDay
-      )
-
-      const [minReps] = volume.reps.split('-').map(Number)
+      const exercises = weekSelection[dayIndex]
 
       const dayExerciseRows = exercises.map((exercise, index) => ({
         workout_day_id: workoutDay.id,
@@ -71,6 +76,7 @@ export async function generateFirstMonth(
         target_sets: volume.sets,
         target_reps: minReps,
         target_load_kg: null,
+        target_rir: targetRir,
       }))
 
       const { error: exerciseError } = await supabase
