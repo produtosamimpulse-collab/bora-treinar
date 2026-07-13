@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Popular a tabela `exercise` (criada na Fase 1) com o catálogo real da ExerciseDB (nome, grupo muscular, instrução, GIF de demonstração) e ter uma página que lista esses exercícios, servindo de base de dados para a geração de treinos nas próximas fases.
+**Goal:** Popular a tabela `exercise` (criada na Fase 1) com o catálogo de texto real da ExerciseDB (nome, grupo muscular, instrução) e ter uma página que lista esses exercícios, servindo de base de dados para a geração de treinos nas próximas fases. GIFs de demonstração ficam **fora do escopo desta fase** (ver nota abaixo) — entram numa fase futura, quando a execução guiada do treino realmente precisar exibi-los.
 
-**Architecture:** Um cliente HTTP fino para a API da ExerciseDB (`lib/exercisedb/client.ts`), uma função pura de mapeamento pro formato da tabela `exercise` (`lib/exercisedb/map.ts`), um script standalone de sincronização (`scripts/sync-exercises.ts`, rodado manualmente via `npm run sync:exercises` — nunca em request de usuário, pra não estourar limite de requisições da API gratuita), e uma página server-side (`app/exercicios/page.tsx`) que lê o catálogo já sincronizado no Supabase.
+> **Nota de implementação (descoberta ao testar a API antes de escrever este plano):** a resposta da listagem `/exercises` da ExerciseDB **não inclui GIF** — cada GIF só é obtido via um endpoint separado (`/image?exerciseId=<id>`), uma requisição por exercício. O plano gratuito da ExerciseDB tem cota de **690 requisições/mês no total**, e o catálogo tem mais de 1300 exercícios — buscar o GIF de cada um estouraria a cota completamente. Por isso, esta fase sincroniza só o texto (1 única chamada bulk, cabe tranquilo na cota) e deixa `media_url` como `null`. A busca do GIF sob demanda (1 requisição por exercício, na primeira vez que ele for exibido de verdade, cacheada permanentemente no Supabase Storage depois disso) fica para quando a execução guiada do treino for construída — não faz sentido implementar esse cache agora sem nada que o consuma.
+
+**Architecture:** Um cliente HTTP fino para a API da ExerciseDB (`lib/exercisedb/client.ts`), uma função pura de mapeamento pro formato da tabela `exercise` (`lib/exercisedb/map.ts`), um script standalone de sincronização (`scripts/sync-exercises.ts`, rodado manualmente via `npm run sync:exercises` — nunca em request de usuário, pra não estourar limite de requisições da API gratuita), e uma página server-side (`app/exercicios/page.tsx`) que lê o catálogo já sincronizado no Supabase (só texto, sem imagem).
 
 **Tech Stack:** Next.js (App Router), TypeScript, Vitest, Supabase (tabela `exercise` já existente), ExerciseDB API (via RapidAPI), `tsx` (rodar scripts TypeScript standalone).
 
@@ -12,9 +14,9 @@
 
 - Banco compartilhado com o CRM da AM Impulse — nenhuma migration nova nesta fase (a tabela `exercise` já existe desde a Fase 1), mas se qualquer alteração de schema for necessária, seguir as mesmas regras: só `supabase db push`, nunca `db reset`/`drop`/`truncate`
 - RLS: a tabela `exercise` já tem a policy `exercise_read_authenticated` (select para usuários autenticados); escritas (o sync) acontecem via `createServerSupabaseClient()` (service_role, bypassa RLS) — nunca inserir exercícios pelo cliente browser
-- A API da ExerciseDB tem cota limitada no plano gratuito — o cliente/script deve fazer o mínimo de requisições possível (idealmente 1 chamada bulk), nunca um loop de centenas de chamadas
+- A API da ExerciseDB tem cota de **690 requisições/mês no plano gratuito**, compartilhada entre todos os endpoints — o cliente/script deve fazer o mínimo de requisições possível (1 chamada bulk pro texto, nesta fase). Nunca chamar o endpoint `/image` (GIF) em loop — está fora de escopo desta fase.
 - Paleta visual: fundo claro (`#FFFFFF`), texto preto (`#0A0A0A`), destaque verde água (`#2DD4BF`) — reaproveitar os tokens `bg-background`/`text-foreground`/`bg-brand` já configurados na Fase 1
-- Credenciais da ExerciseDB (`EXERCISEDB_API_KEY`, `EXERCISEDB_API_HOST`) vão em `.env.local` (nunca commitadas, já coberto pelo `.gitignore` existente)
+- Credenciais da ExerciseDB (`EXERCISEDB_API_KEY`, `EXERCISEDB_API_HOST`) vão em `.env.local` (já preenchidas, cobertas pelo `.gitignore` existente)
 
 ---
 
@@ -25,10 +27,10 @@
 - Test: `lib/exercisedb/client.test.ts`
 
 **Interfaces:**
-- Consumes: `EXERCISEDB_API_KEY`, `EXERCISEDB_API_HOST` (env vars, fornecidas pelo usuário)
+- Consumes: `EXERCISEDB_API_KEY`, `EXERCISEDB_API_HOST` (env vars, já preenchidas em `.env.local`)
 - Produces: `fetchAllExercises(): Promise<ExerciseDbExercise[]>`, tipo `ExerciseDbExercise` exportado de `lib/exercisedb/client.ts`, consumido pelo Task 2
 
-> **Nota de implementação:** o formato exato da resposta da ExerciseDB abaixo é a minha melhor expectativa, mas essa API pode ter mudado. **Antes de escrever o teste**, faça UMA chamada real com `curl` usando a chave fornecida (ex: `curl -s "https://<HOST>/exercises?limit=3" -H "X-RapidAPI-Key: <KEY>" -H "X-RapidAPI-Host: <HOST>"`) e confira se os campos batem com o tipo `ExerciseDbExercise` abaixo. Se a resposta vier diferente (nomes de campo diferentes, paginação em formato de objeto em vez de array puro, etc.), ajuste o tipo e o teste de acordo — documente a mudança no seu relatório, igual foi feito na Fase 1 quando o Tailwind v4 divergiu do plano original.
+> **Formato real confirmado** (chamada de verificação já feita pelo controlador antes de escrever este plano, `GET /exercises?limit=3`): cada item vem com `bodyPart`, `equipment`, `id`, `name`, `target`, `secondaryMuscles`, `instructions`, `description`, `difficulty`, `category`. **Não existe campo de GIF/imagem na listagem** — só via endpoint separado, fora de escopo desta fase (ver nota no topo do plano).
 
 - [ ] **Step 1: Escrever o teste do cliente (falhando)**
 
@@ -54,13 +56,15 @@ describe('fetchAllExercises', () => {
     const mockExercises = [
       {
         id: '0001',
-        name: 'push-up',
-        bodyPart: 'chest',
+        name: '3/4 sit-up',
+        bodyPart: 'waist',
         equipment: 'body weight',
-        gifUrl: 'https://example.com/0001.gif',
-        target: 'pectorals',
-        secondaryMuscles: ['triceps'],
-        instructions: ['Step 1', 'Step 2'],
+        target: 'abs',
+        secondaryMuscles: ['hip flexors', 'lower back'],
+        instructions: ['Lie flat on your back...', 'Engage your abs...'],
+        description: 'The 3/4 sit-up is an abdominal exercise...',
+        difficulty: 'beginner',
+        category: 'strength',
       },
     ]
 
@@ -117,10 +121,12 @@ export type ExerciseDbExercise = {
   name: string
   bodyPart: string
   equipment: string
-  gifUrl: string
   target: string
   secondaryMuscles: string[]
   instructions: string[]
+  description: string
+  difficulty: string
+  category: string
 }
 
 export async function fetchAllExercises(): Promise<ExerciseDbExercise[]> {
@@ -145,8 +151,6 @@ export async function fetchAllExercises(): Promise<ExerciseDbExercise[]> {
   return response.json()
 }
 ```
-
-Se a verificação com `curl` do início desta tarefa mostrou um formato diferente, ajuste este tipo/implementação agora, antes de rodar o teste.
 
 - [ ] **Step 4: Rodar e confirmar que passa**
 
@@ -194,41 +198,44 @@ describe('mapToExerciseRow', () => {
   it('maps an ExerciseDB entry to the exercise table row shape', () => {
     const input: ExerciseDbExercise = {
       id: '0001',
-      name: 'push-up',
-      bodyPart: 'chest',
+      name: '3/4 sit-up',
+      bodyPart: 'waist',
       equipment: 'body weight',
-      gifUrl: 'https://example.com/0001.gif',
-      target: 'pectorals',
-      secondaryMuscles: ['triceps'],
+      target: 'abs',
+      secondaryMuscles: ['hip flexors', 'lower back'],
       instructions: ['Step 1', 'Step 2'],
+      description: 'The 3/4 sit-up is an abdominal exercise...',
+      difficulty: 'beginner',
+      category: 'strength',
     }
 
     expect(mapToExerciseRow(input)).toEqual({
       external_id: '0001',
-      name: 'push-up',
+      name: '3/4 sit-up',
       instructions: 'Step 1\nStep 2',
-      muscle_group: 'chest',
+      muscle_group: 'waist',
       equipment: 'body weight',
-      media_url: 'https://example.com/0001.gif',
+      media_url: null,
     })
   })
 
-  it('maps missing equipment/gif to null instead of empty string', () => {
+  it('maps missing equipment to null instead of empty string', () => {
     const input: ExerciseDbExercise = {
       id: '0002',
       name: 'plank',
       bodyPart: 'waist',
       equipment: '',
-      gifUrl: '',
       target: 'abs',
       secondaryMuscles: [],
       instructions: ['Hold position'],
+      description: 'The plank is a core exercise...',
+      difficulty: 'beginner',
+      category: 'strength',
     }
 
     const result = mapToExerciseRow(input)
 
     expect(result.equipment).toBeNull()
-    expect(result.media_url).toBeNull()
   })
 })
 ```
@@ -262,10 +269,12 @@ export function mapToExerciseRow(exercise: ExerciseDbExercise): ExerciseRow {
     instructions: exercise.instructions.join('\n'),
     muscle_group: exercise.bodyPart,
     equipment: exercise.equipment || null,
-    media_url: exercise.gifUrl || null,
+    media_url: null,
   }
 }
 ```
+
+`media_url` fica sempre `null` nesta fase — não existe GIF na resposta da listagem (ver nota no topo do plano). O campo já existe na tabela pra quando uma fase futura implementar o cache sob demanda.
 
 - [ ] **Step 5: Rodar e confirmar que passa**
 
@@ -409,35 +418,47 @@ git commit -m "test: verify exercise table is populated after sync"
 
 - [ ] **Step 1: Criar `app/exercicios/page.tsx`**
 
+Sem imagem/GIF nesta fase (ver nota no topo do plano) — a página agrupa por grupo muscular, o que já deixa a lista de 1000+ exercícios navegável.
+
 ```tsx
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+
+type Exercise = {
+  id: string
+  name: string
+  muscle_group: string
+}
 
 export default async function ExerciciosPage() {
   const supabase = createServerSupabaseClient()
   const { data: exercises } = await supabase
     .from('exercise')
-    .select('id, name, muscle_group, media_url')
+    .select('id, name, muscle_group')
     .order('muscle_group')
+    .order('name')
+
+  const grouped = (exercises ?? []).reduce<Record<string, Exercise[]>>((acc, exercise) => {
+    const group = exercise.muscle_group
+    acc[group] = acc[group] ?? []
+    acc[group].push(exercise)
+    return acc
+  }, {})
 
   return (
     <main className="min-h-screen bg-background text-foreground p-6">
       <h1 className="mb-6 text-2xl font-semibold">Biblioteca de exercícios</h1>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-        {exercises?.map((exercise) => (
-          <div key={exercise.id} className="rounded border border-gray-200 p-3">
-            {exercise.media_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={exercise.media_url}
-                alt={exercise.name}
-                className="h-32 w-full rounded object-cover"
-              />
-            )}
-            <p className="mt-2 text-sm font-medium">{exercise.name}</p>
-            <p className="text-xs text-gray-500">{exercise.muscle_group}</p>
-          </div>
-        ))}
-      </div>
+      {Object.entries(grouped).map(([group, groupExercises]) => (
+        <section key={group} className="mb-8">
+          <h2 className="mb-3 text-lg font-medium capitalize text-brand">{group}</h2>
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+            {groupExercises.map((exercise) => (
+              <li key={exercise.id} className="rounded border border-gray-200 p-2 text-sm">
+                {exercise.name}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </main>
   )
 }
@@ -466,4 +487,4 @@ git commit -m "feat: add exercise library listing page"
 
 ## Fim da Fase 2
 
-Ao final desta fase: a tabela `exercise` tem o catálogo real da ExerciseDB sincronizado, e `/exercicios` mostra a lista com nome, grupo muscular e GIF de cada exercício. Essa base alimenta a Fase 3 (onboarding conversacional + geração do primeiro plano mensal).
+Ao final desta fase: a tabela `exercise` tem o catálogo real da ExerciseDB sincronizado (nome, instrução, grupo muscular — sem GIF ainda), e `/exercicios` mostra a lista agrupada por grupo muscular. Essa base alimenta a Fase 3 (onboarding conversacional + geração do primeiro plano mensal). O cache sob demanda de GIFs (fetch na primeira exibição + Supabase Storage) fica para a fase que construir a execução guiada do treino.
