@@ -25,6 +25,7 @@ describe('mapToExerciseRow', () => {
       equipment: 'body weight',
       media_url: null,
       target: 'abs',
+      secondary_muscles: ['hip flexors', 'lower back'],
     })
   })
 
@@ -46,5 +47,22 @@ describe('mapToExerciseRow', () => {
 
     expect(result.equipment).toBeNull()
     expect(result.target).toBe('abs')
+  })
+
+  it('maps secondaryMuscles to secondary_muscles', () => {
+    const row = mapToExerciseRow({
+      id: 'ext-1',
+      name: 'Barbell Bench Press',
+      instructions: ['Step 1'],
+      bodyPart: 'chest',
+      equipment: 'barbell',
+      target: 'pectorals',
+      secondaryMuscles: ['triceps', 'delts'],
+      description: 'Barbell bench press',
+      difficulty: 'intermediate',
+      category: 'strength',
+    })
+
+    expect(row.secondary_muscles).toEqual(['triceps', 'delts'])
   })
 })

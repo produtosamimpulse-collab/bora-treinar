@@ -8,6 +8,7 @@ export type ExerciseRow = {
   equipment: string | null
   media_url: string | null
   target: string
+  secondary_muscles: string[]
 }
 
 export function mapToExerciseRow(exercise: ExerciseDbExercise): ExerciseRow {
@@ -19,5 +20,6 @@ export function mapToExerciseRow(exercise: ExerciseDbExercise): ExerciseRow {
     equipment: exercise.equipment || null,
     media_url: null,
     target: exercise.target,
+    secondary_muscles: exercise.secondaryMuscles,
   }
 }
