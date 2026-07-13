@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockSingle = vi.hoisted(() => vi.fn())
 const mockUpdate = vi.hoisted(() => vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }))
@@ -34,11 +34,14 @@ describe('GET /api/exercises/:id/gif', () => {
     global.fetch = originalFetch
   })
 
-  it('redirects straight to media_url when already cached', async () => {
+  it('redirects straight to media_url when already cached, without calling ExerciseDB', async () => {
     mockSingle.mockResolvedValue({
       data: { id: 'ex-1', external_id: '0001', media_url: 'https://storage.example/cached.gif' },
       error: null,
     })
+
+    const fetchSpy = vi.fn()
+    global.fetch = fetchSpy as unknown as typeof fetch
 
     const response = await GET(new Request('http://localhost/api/exercises/ex-1/gif'), {
       params: Promise.resolve({ id: 'ex-1' }),
@@ -46,7 +49,8 @@ describe('GET /api/exercises/:id/gif', () => {
 
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toBe('https://storage.example/cached.gif')
-    expect(global.fetch).not.toBeDefined
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(mockUpload).not.toHaveBeenCalled()
   })
 
   it('fetches from ExerciseDB, caches, and redirects when not yet cached', async () => {
