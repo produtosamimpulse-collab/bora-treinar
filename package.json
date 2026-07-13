@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "sync:exercises": "tsx scripts/sync-exercises.ts"
+    "sync:exercises": "tsx scripts/sync-exercises.ts",
+    "translate:exercises": "tsx scripts/translate-exercises.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
