@@ -864,7 +864,7 @@ describe('calculateProgressiveLoad', () => {
   })
 
   it('applies a smaller cumulative increase for week 4', () => {
-    expect(calculateProgressiveLoad(100, 4)).toBeCloseTo(113.0125)
+    expect(calculateProgressiveLoad(100, 4)).toBeCloseTo(113.00625)
   })
 
   it('never exceeds a 5% single-step increase, even with a tampered rate', () => {
