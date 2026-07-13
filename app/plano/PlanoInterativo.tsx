@@ -136,7 +136,7 @@ export default function PlanoInterativo({
                         type="button"
                         onClick={() => swapExercise(exercise.id)}
                         disabled={swapping === exercise.id}
-                        className="self-start rounded-full border border-border-subtle px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-foreground/70 disabled:opacity-50 sm:self-auto"
+                        className="min-h-11 self-start rounded-full border border-border-subtle px-4 text-xs font-semibold uppercase tracking-wide text-foreground/70 disabled:opacity-50 sm:self-auto"
                       >
                         {swapping === exercise.id ? 'Trocando...' : 'Trocar'}
                       </button>
