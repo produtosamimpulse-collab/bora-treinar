@@ -86,7 +86,7 @@ export default function OnboardingPage() {
         <button
           onClick={sendMessage}
           disabled={loading}
-          className="rounded-xl bg-brand px-5 text-sm font-semibold uppercase text-black disabled:opacity-50"
+          className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold uppercase text-black disabled:opacity-50"
         >
           Enviar
         </button>

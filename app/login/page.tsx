@@ -66,7 +66,7 @@ export default function LoginPage() {
 
       <form
         onSubmit={handleSubmit}
-        className="relative w-full max-w-sm rounded-2xl border border-border-subtle bg-surface p-8 shadow-xl shadow-black/5"
+        className="relative w-full max-w-sm rounded-2xl border border-border-subtle bg-surface p-6 shadow-xl shadow-black/5 sm:p-8"
       >
         <span className="mb-2 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-foreground/60">
           <span className="h-1.5 w-1.5 rounded-full bg-brand" />

@@ -12,7 +12,7 @@ export default function Home() {
           Seu personal trainer com IA
         </span>
 
-        <h1 className="font-display text-6xl uppercase leading-[0.95] tracking-tight sm:text-8xl">
+        <h1 className="font-display text-5xl uppercase leading-[0.95] tracking-tight sm:text-8xl">
           Bora
           <br />
           <span className="text-brand">Treinar!</span>
