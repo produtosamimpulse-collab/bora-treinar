@@ -791,7 +791,9 @@ git commit -m "feat: add on-demand exercise GIF caching route"
 - Test: `app/api/workout-sessions/complete/route.test.ts`
 
 **Interfaces:**
-- Produces: `POST /api/workout-sessions/complete` — recebe `{ userId: string; workoutDayId: string }`, cria uma linha em `workout_session` com `completed: true`
+- Produces: `POST /api/workout-sessions/complete` — deriva o usuário da sessão autenticada (`getAuthenticatedUserId`, de `lib/supabase/session.ts`, criado na Fase 3 após uma correção de segurança), recebe `{ workoutDayId: string }` no corpo, cria uma linha em `workout_session` com `completed: true`. Retorna 401 se não houver sessão.
+
+> **Nota de implementação (atualizado após revisão):** a versão original deste passo confiava em um `userId` enviado pelo corpo da requisição, repetindo uma falha de segurança já corrigida antes na rota de onboarding (Fase 3). Corrigido para reaproveitar `getAuthenticatedUserId()`, igual à rota de onboarding.
 
 - [ ] **Step 1: Escrever o teste (falhando)**
 
@@ -800,24 +802,42 @@ Create `app/api/workout-sessions/complete/route.test.ts`:
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockInsert = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
+const mockGetAuthenticatedUserId = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: () => ({
     from: () => ({ insert: mockInsert }),
   }),
 }))
+vi.mock('@/lib/supabase/session', () => ({ getAuthenticatedUserId: mockGetAuthenticatedUserId }))
 
 import { POST } from './route'
 
 describe('POST /api/workout-sessions/complete', () => {
   beforeEach(() => {
     mockInsert.mockClear()
+    mockGetAuthenticatedUserId.mockReset()
+    mockGetAuthenticatedUserId.mockResolvedValue('user-1')
   })
 
-  it('creates a completed workout_session row', async () => {
+  it('returns 401 when there is no authenticated session', async () => {
+    mockGetAuthenticatedUserId.mockResolvedValue(null)
+
     const request = new Request('http://localhost/api/workout-sessions/complete', {
       method: 'POST',
-      body: JSON.stringify({ userId: 'user-1', workoutDayId: 'day-1' }),
+      body: JSON.stringify({ workoutDayId: 'day-1' }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(401)
+    expect(mockInsert).not.toHaveBeenCalled()
+  })
+
+  it('creates a completed workout_session row using the session user id', async () => {
+    const request = new Request('http://localhost/api/workout-sessions/complete', {
+      method: 'POST',
+      body: JSON.stringify({ workoutDayId: 'day-1' }),
     })
 
     const response = await POST(request)
@@ -844,12 +864,16 @@ Expected: FAIL — a rota não existe.
 ```typescript
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getAuthenticatedUserId } from '@/lib/supabase/session'
 
 export async function POST(request: Request) {
-  const { userId, workoutDayId } = (await request.json()) as {
-    userId: string
-    workoutDayId: string
+  const userId = await getAuthenticatedUserId()
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  const { workoutDayId } = (await request.json()) as { workoutDayId: string }
 
   const supabase = createServerSupabaseClient()
 
@@ -926,19 +950,19 @@ type DayItem = {
 
 export default function PlanoInterativo({
   days,
-  userId,
 }: {
   days: DayItem[]
-  userId: string
 }) {
   const [openDayId, setOpenDayId] = useState<string | null>(days[0]?.id ?? null)
   const [completedDayIds, setCompletedDayIds] = useState<Set<string>>(new Set())
 
   async function markComplete(dayId: string) {
+    // A API deriva o usuário da sessão (getAuthenticatedUserId) — não
+    // enviamos userId daqui, o cliente não deve ser responsável por isso.
     await fetch('/api/workout-sessions/complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, workoutDayId: dayId }),
+      body: JSON.stringify({ workoutDayId: dayId }),
     })
     setCompletedDayIds((current) => new Set(current).add(dayId))
   }
@@ -1029,8 +1053,6 @@ export default async function PlanoPage({
 
   const supabase = createServerSupabaseClient()
 
-  const { data: userData } = await supabase.auth.getUser()
-
   const { data: days } = await supabase
     .from('workout_day')
     .select(
@@ -1072,7 +1094,7 @@ export default async function PlanoPage({
         </h1>
       </header>
 
-      <PlanoInterativo days={formattedDays} userId={userData.user?.id ?? ''} />
+      <PlanoInterativo days={formattedDays} />
     </main>
   )
 }
