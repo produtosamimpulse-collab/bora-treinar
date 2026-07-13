@@ -336,15 +336,140 @@ git commit -m "feat: add exercise mapping and sync script"
 
 ---
 
-## Task 3: Rodar a sincronização real e verificar os dados
+## Task 3: Corrigir paginação no cliente ExerciseDB
 
-> **Atenção:** esta tarefa faz UMA chamada real à API da ExerciseDB (consome cota do plano gratuito) e escreve de verdade na tabela `exercise` do banco compartilhado com o CRM. É uma operação de `upsert` (nunca apaga linhas existentes), então é segura mesmo rodando mais de uma vez.
+> **Contexto:** ao tentar rodar a sincronização de verdade (tentativa bloqueada), descobrimos que a API da ExerciseDB **ignora o parâmetro `limit` acima de 10** — cada resposta vem com no máximo 10 itens, independente do valor pedido. Confirmado com chamadas reais (`limit=5` → 5 itens, `limit=50` → 10 itens). É preciso paginar com `offset` até a página vir com menos de 10 itens (sinal de que acabou). Essa correção é no arquivo já criado no Task 1.
+
+**Files:**
+- Modify: `lib/exercisedb/client.ts`, `lib/exercisedb/client.test.ts`
+
+**Interfaces:**
+- Produces: `fetchAllExercises()` continua com a mesma assinatura, mas agora pagina internamente até esgotar o catálogo
+
+- [ ] **Step 1: Atualizar o teste do cliente para cobrir paginação (falhando)**
+
+Substituir o primeiro teste (`'calls the ExerciseDB API with the right headers and returns the parsed list'`) por um teste de paginação, mantendo os outros dois (`'throws when the API responds with an error status'`, `'throws when credentials are missing'`) como estão:
+
+```typescript
+  it('paginates through the API until a page returns fewer than 10 items', async () => {
+    const page1 = Array.from({ length: 10 }, (_, i) => ({
+      id: String(i + 1).padStart(4, '0'),
+      name: `exercise-${i + 1}`,
+      bodyPart: 'chest',
+      equipment: 'body weight',
+      target: 'pectorals',
+      secondaryMuscles: [],
+      instructions: ['Step 1'],
+      description: 'desc',
+      difficulty: 'beginner',
+      category: 'strength',
+    }))
+    const page2 = page1.slice(0, 3).map((e) => ({ ...e, id: `p2-${e.id}` }))
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => page1 })
+      .mockResolvedValueOnce({ ok: true, json: async () => page2 })
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await fetchAllExercises()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('offset=0'),
+      expect.anything()
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('offset=10'),
+      expect.anything()
+    )
+    expect(result).toHaveLength(13)
+  })
+```
+
+- [ ] **Step 2: Rodar e confirmar que falha**
+
+Run:
+```bash
+npm test
+```
+Expected: FAIL — a implementação atual não pagina, só faz 1 chamada.
+
+- [ ] **Step 3: Reescrever `fetchAllExercises` com paginação**
+
+Substituir a implementação de `fetchAllExercises` em `lib/exercisedb/client.ts` (o tipo `ExerciseDbExercise` continua igual):
+
+```typescript
+const PAGE_SIZE = 10
+
+export async function fetchAllExercises(): Promise<ExerciseDbExercise[]> {
+  const apiKey = process.env.EXERCISEDB_API_KEY
+  const apiHost = process.env.EXERCISEDB_API_HOST
+
+  if (!apiKey || !apiHost) {
+    throw new Error('Missing ExerciseDB API credentials')
+  }
+
+  const headers = {
+    'X-RapidAPI-Key': apiKey,
+    'X-RapidAPI-Host': apiHost,
+  }
+
+  const all: ExerciseDbExercise[] = []
+  let offset = 0
+
+  while (true) {
+    const response = await fetch(
+      `https://${apiHost}/exercises?limit=${PAGE_SIZE}&offset=${offset}`,
+      { headers }
+    )
+
+    if (!response.ok) {
+      throw new Error(`ExerciseDB request failed: ${response.status}`)
+    }
+
+    const page: ExerciseDbExercise[] = await response.json()
+    all.push(...page)
+
+    if (page.length < PAGE_SIZE) {
+      break
+    }
+
+    offset += PAGE_SIZE
+  }
+
+  return all
+}
+```
+
+- [ ] **Step 4: Rodar e confirmar que passa**
+
+Run:
+```bash
+npm test
+```
+Expected: PASS (todos os testes de `client.test.ts` e do resto da suíte).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add lib/exercisedb/client.ts lib/exercisedb/client.test.ts
+git commit -m "fix: paginate ExerciseDB client past the 10-item page cap"
+```
+
+---
+
+## Task 4: Rodar a sincronização real e verificar os dados
+
+> **Atenção:** esta tarefa faz várias chamadas reais à API da ExerciseDB (a paginação da Task 3 usa ~10 itens por página, então sincronizar o catálogo inteiro custa dezenas de requisições — ainda bem dentro da cota) e escreve de verdade na tabela `exercise` do banco compartilhado com o CRM. É uma operação de `upsert` (nunca apaga linhas existentes), então é segura mesmo rodando mais de uma vez. A tabela já tem 10 linhas de uma tentativa anterior (bloqueada antes da correção de paginação) — serão sobrescritas pelo upsert, sem problema.
 
 **Files:**
 - Test: `lib/exercisedb/sync.test.ts`
 
 **Interfaces:**
-- Consumes: `npm run sync:exercises` (Task 2), `SUPABASE_DB_URL` (`.env.test`, da Fase 1)
+- Consumes: `npm run sync:exercises` (Task 2, com paginação corrigida no Task 3), `SUPABASE_DB_URL` (`.env.test`, da Fase 1)
 - Produces: tabela `exercise` populada no Supabase
 
 - [ ] **Step 1: Escrever o teste de verificação (falhando)**
@@ -379,7 +504,7 @@ Run:
 ```bash
 npm test
 ```
-Expected: FAIL — a tabela `exercise` ainda está vazia (0 linhas).
+Expected: FAIL — a tabela `exercise` tem só as 10 linhas da tentativa anterior (ou 0, se for a primeira vez), bem abaixo do limiar de 500.
 
 - [ ] **Step 3: Rodar a sincronização de verdade**
 
@@ -406,7 +531,7 @@ git commit -m "test: verify exercise table is populated after sync"
 
 ---
 
-## Task 4: Página de listagem da biblioteca de exercícios
+## Task 5: Página de listagem da biblioteca de exercícios
 
 **Files:**
 - Create: `app/exercicios/page.tsx`
