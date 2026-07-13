@@ -2,12 +2,20 @@ import { describe, it, expect } from 'vitest'
 import { translateDayLabel } from './label-i18n'
 
 describe('translateDayLabel', () => {
-  it('translates legacy English split labels', () => {
-    expect(translateDayLabel('Push')).toBe('Empurrar')
-    expect(translateDayLabel('Pull')).toBe('Puxar')
-    expect(translateDayLabel('Legs')).toBe('Pernas')
-    expect(translateDayLabel('Upper')).toBe('Superior')
-    expect(translateDayLabel('Lower')).toBe('Inferior')
+  it('translates legacy English split labels to the current descriptive names', () => {
+    expect(translateDayLabel('Push')).toBe('Peito, Ombros e Tríceps')
+    expect(translateDayLabel('Pull')).toBe('Costas e Bíceps')
+    expect(translateDayLabel('Legs')).toBe('Pernas e Glúteos')
+    expect(translateDayLabel('Upper')).toBe('Peito, Costas e Ombros')
+    expect(translateDayLabel('Lower')).toBe('Pernas e Glúteos')
+  })
+
+  it('translates the short Portuguese labels from the first localization round', () => {
+    expect(translateDayLabel('Empurrar')).toBe('Peito, Ombros e Tríceps')
+    expect(translateDayLabel('Puxar')).toBe('Costas e Bíceps')
+    expect(translateDayLabel('Pernas')).toBe('Pernas e Glúteos')
+    expect(translateDayLabel('Superior')).toBe('Peito, Costas e Ombros')
+    expect(translateDayLabel('Inferior')).toBe('Pernas e Glúteos')
   })
 
   it('translates legacy "Full Body N" labels preserving the number', () => {
@@ -15,8 +23,8 @@ describe('translateDayLabel', () => {
     expect(translateDayLabel('Full Body 3')).toBe('Corpo Inteiro 3')
   })
 
-  it('passes through labels that are already in Portuguese', () => {
-    expect(translateDayLabel('Empurrar')).toBe('Empurrar')
+  it('passes through labels that already use the current descriptive names', () => {
+    expect(translateDayLabel('Peito, Ombros e Tríceps')).toBe('Peito, Ombros e Tríceps')
     expect(translateDayLabel('Corpo Inteiro 2')).toBe('Corpo Inteiro 2')
   })
 
