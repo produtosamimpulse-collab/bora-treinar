@@ -29,4 +29,36 @@ describe('chooseSplit', () => {
     expect(() => chooseSplit(0)).toThrow()
     expect(() => chooseSplit(8)).toThrow()
   })
+
+  // Regressão: os targets precisam bater com o vocabulário real da coluna
+  // `exercise.target` (ex: "pectorals", "abs"), não com `muscle_group`
+  // (ex: "chest"). Confirmado consultando os 1394 exercícios sincronizados.
+  const VALID_EXERCISEDB_TARGETS = new Set([
+    'abductors', 'abs', 'adductors', 'biceps', 'calves',
+    'cardiovascular system', 'delts', 'forearms', 'glutes', 'hamstrings',
+    'lats', 'levator scapulae', 'pectorals', 'quads',
+    'serratus anterior', 'spine', 'traps', 'triceps', 'upper back',
+  ])
+
+  it('uses only real exercise.target vocabulary in every split', () => {
+    for (const daysPerWeek of [2, 3, 4, 5, 6, 7]) {
+      const { days } = chooseSplit(daysPerWeek)
+      for (const day of days) {
+        for (const target of day.targets) {
+          expect(VALID_EXERCISEDB_TARGETS.has(target)).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('keeps triceps and biceps on separate days for push/pull splits', () => {
+    const { days } = chooseSplit(6)
+    const push = days.find((d) => d.label === 'Push')!
+    const pull = days.find((d) => d.label === 'Pull')!
+
+    expect(push.targets).toContain('triceps')
+    expect(push.targets).not.toContain('biceps')
+    expect(pull.targets).toContain('biceps')
+    expect(pull.targets).not.toContain('triceps')
+  })
 })

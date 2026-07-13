@@ -5,12 +5,17 @@ export type SplitDay = {
   targets: string[]
 }
 
-const FULL_BODY_TARGETS = ['chest', 'back', 'upper legs', 'shoulders', 'abs']
-const UPPER_TARGETS = ['chest', 'back', 'shoulders', 'triceps', 'biceps']
-const LOWER_TARGETS = ['upper legs', 'lower legs', 'abs']
-const PUSH_TARGETS = ['chest', 'shoulders', 'triceps']
-const PULL_TARGETS = ['back', 'biceps', 'forearms']
-const LEGS_TARGETS = ['upper legs', 'lower legs', 'abs']
+// Valores reais da coluna `exercise.target` (vocabulário da ExerciseDB,
+// confirmado consultando os 1394 exercícios sincronizados) — não são os
+// mesmos valores de `exercise.muscle_group` (que vem de `bodyPart`, ex:
+// "chest", "back"). Ver docs/superpowers/plans/2026-07-13-melhorias-plano-treino.md
+// para o contexto da correção.
+const FULL_BODY_TARGETS = ['pectorals', 'lats', 'quads', 'delts', 'abs', 'glutes', 'hamstrings']
+const UPPER_TARGETS = ['pectorals', 'lats', 'upper back', 'delts', 'triceps', 'biceps', 'traps']
+const LOWER_TARGETS = ['quads', 'hamstrings', 'glutes', 'calves', 'abs', 'adductors']
+const PUSH_TARGETS = ['pectorals', 'delts', 'triceps']
+const PULL_TARGETS = ['lats', 'upper back', 'biceps', 'forearms', 'traps']
+const LEGS_TARGETS = ['quads', 'hamstrings', 'glutes', 'calves', 'abs']
 
 export function chooseSplit(daysPerWeek: number): { type: SplitType; days: SplitDay[] } {
   if (daysPerWeek < 1 || daysPerWeek > 7) {
