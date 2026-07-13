@@ -47,6 +47,15 @@ export default function PlanoInterativo({
     }
     return initial
   })
+  const [exerciseIds, setExerciseIds] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {}
+    for (const day of days) {
+      for (const exercise of day.exercises) {
+        initial[exercise.id] = exercise.exerciseId
+      }
+    }
+    return initial
+  })
   const [checkedExerciseIds, setCheckedExerciseIds] = useState<Set<string>>(new Set())
   const [swapping, setSwapping] = useState<string | null>(null)
 
@@ -94,6 +103,10 @@ export default function PlanoInterativo({
         ...current,
         [workoutDayExerciseId]: newExercise.name_pt ?? newExercise.name,
       }))
+      setExerciseIds((current) => ({
+        ...current,
+        [workoutDayExerciseId]: newExercise.id,
+      }))
     } finally {
       setSwapping(null)
     }
@@ -138,7 +151,7 @@ export default function PlanoInterativo({
                           className="h-5 w-5 accent-[var(--brand)]"
                         />
                         <img
-                          src={`/api/exercises/${exercise.exerciseId}/gif`}
+                          src={`/api/exercises/${exerciseIds[exercise.id]}/gif`}
                           alt={exerciseNames[exercise.id]}
                           className="h-16 w-16 rounded-lg object-cover"
                           loading="lazy"
