@@ -14,6 +14,40 @@ export type VolumeRange = { min: number; max: number }
 
 const EXCLUDED_EQUIPMENT = ['assisted', 'assisted (towel)']
 
+// Sem isso, a ordem crua da consulta (sem ORDER BY) podia concentrar um dia
+// inteiro num único grupo muscular (ex.: só peito) quando esse grupo
+// aparecia primeiro nas linhas retornadas. Reordena os candidatos em
+// rodízio por `target`, garantindo que nenhum grupo monopolize as vagas do
+// dia antes dos outros grupos terem chance.
+function interleaveByTarget(candidates: CandidateExercise[]): CandidateExercise[] {
+  const byTarget = new Map<string, CandidateExercise[]>()
+  for (const candidate of candidates) {
+    const group = byTarget.get(candidate.target) ?? []
+    group.push(candidate)
+    byTarget.set(candidate.target, group)
+  }
+
+  const groups = [...byTarget.values()]
+  const result: CandidateExercise[] = []
+  let round = 0
+
+  while (result.length < candidates.length) {
+    let addedInRound = false
+
+    for (const group of groups) {
+      if (round < group.length) {
+        result.push(group[round])
+        addedInRound = true
+      }
+    }
+
+    if (!addedInRound) break
+    round += 1
+  }
+
+  return result
+}
+
 export function planWeekExercises(
   candidatesByDay: CandidateExercise[][],
   volumeRange: VolumeRange,
@@ -24,7 +58,7 @@ export function planWeekExercises(
   const result: CandidateExercise[][] = []
 
   for (const dayCandidates of candidatesByDay) {
-    const fresh = dayCandidates.filter((candidate) => !usedIds.has(candidate.id))
+    const fresh = interleaveByTarget(dayCandidates.filter((candidate) => !usedIds.has(candidate.id)))
     const chosen: CandidateExercise[] = []
 
     // passo 1: só candidatos ainda não usados esta semana, respeitando o teto de volume
@@ -45,7 +79,7 @@ export function planWeekExercises(
     // passo 2 (fallback): ainda faltam vagas - permite repetir um exercício já
     // usado antes na semana, mas ainda respeitando o teto de volume
     if (chosen.length < exercisesPerDay) {
-      for (const candidate of dayCandidates) {
+      for (const candidate of interleaveByTarget(dayCandidates)) {
         if (chosen.length >= exercisesPerDay) break
         if (chosen.some((c) => c.id === candidate.id)) continue
 
@@ -54,6 +88,9 @@ export function planWeekExercises(
 
         chosen.push(candidate)
         usedSets[candidate.target] = currentSets + 1
+        for (const secondary of candidate.secondaryMuscles) {
+          usedSets[secondary] = (usedSets[secondary] ?? 0) + 0.5
+        }
         usedIds.add(candidate.id)
       }
     }

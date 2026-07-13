@@ -63,4 +63,27 @@ describe('planWeekExercises', () => {
     expect(result[1].map((e) => e.id)).toEqual(['d1'])
     expect(result[2].map((e) => e.id)).toEqual(['d4'])
   })
+
+  it('distributes exercises across all of a day\'s target muscles instead of letting one target monopolize the slots', () => {
+    // Regressão: sem intercalar por alvo, a ordem crua da consulta (sem
+    // ORDER BY) podia devolver os 6 exercícios de peito primeiro, fazendo o
+    // dia inteiro de corpo inteiro virar treino de peito, sem nada de
+    // costas ou perna.
+    const pectorals = Array.from({ length: 6 }, (_, i) => exercise(`p${i + 1}`, 'pectorals', 'composto'))
+    const lats = [exercise('l1', 'lats', 'composto'), exercise('l2', 'lats', 'composto')]
+    const quads = [exercise('q1', 'quads', 'composto'), exercise('q2', 'quads', 'composto')]
+
+    const candidatesByDay = [[...pectorals, ...lats, ...quads]]
+
+    const result = planWeekExercises(candidatesByDay, { min: 0, max: 20 }, 6)
+
+    const targetsChosen = result[0].map((e) => e.target)
+    const countByTarget = {
+      pectorals: targetsChosen.filter((t) => t === 'pectorals').length,
+      lats: targetsChosen.filter((t) => t === 'lats').length,
+      quads: targetsChosen.filter((t) => t === 'quads').length,
+    }
+
+    expect(countByTarget).toEqual({ pectorals: 2, lats: 2, quads: 2 })
+  })
 })
