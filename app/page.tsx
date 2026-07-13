@@ -30,14 +30,6 @@ export default function Home() {
             Começar meu plano
             <span aria-hidden>→</span>
           </a>
-
-          <a
-            href="/exercicios"
-            className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-6 py-3 text-sm font-semibold uppercase tracking-wide text-foreground transition-transform hover:scale-105"
-          >
-            Ver biblioteca de exercícios
-            <span aria-hidden>→</span>
-          </a>
         </div>
       </div>
     </div>

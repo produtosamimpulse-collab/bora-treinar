@@ -46,11 +46,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ type: 'completed', trainingPlanId })
   } catch (generationError) {
     console.error('Failed to generate first month:', generationError)
+
+    const referenceMonth = new Date()
+    referenceMonth.setDate(1)
+
+    const { data: existingPlan } = await supabase
+      .from('training_plan')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('reference_month', referenceMonth.toISOString().slice(0, 10))
+      .maybeSingle()
+
+    if (existingPlan) {
+      return NextResponse.json({ type: 'completed', trainingPlanId: existingPlan.id })
+    }
+
     return NextResponse.json(
       {
         type: 'message',
         content:
-          'Já existe um plano gerado para você este mês. Fale com o suporte se quiser recomeçar.',
+          'Algo deu errado ao gerar seu plano. Tente enviar sua última mensagem de novo.',
       },
       { status: 200 }
     )

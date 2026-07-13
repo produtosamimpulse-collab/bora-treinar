@@ -1,25 +1,44 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockChatWithTool, mockGenerateFirstMonth, mockInsert, mockSingle, mockGetAuthenticatedUserId } =
-  vi.hoisted(() => ({
-    mockChatWithTool: vi.fn(),
-    mockGenerateFirstMonth: vi.fn(),
-    mockInsert: vi.fn(),
-    mockSingle: vi.fn(),
-    mockGetAuthenticatedUserId: vi.fn(),
-  }))
+const {
+  mockChatWithTool,
+  mockGenerateFirstMonth,
+  mockInsert,
+  mockSingle,
+  mockGetAuthenticatedUserId,
+  mockMaybeSingle,
+} = vi.hoisted(() => ({
+  mockChatWithTool: vi.fn(),
+  mockGenerateFirstMonth: vi.fn(),
+  mockInsert: vi.fn(),
+  mockSingle: vi.fn(),
+  mockGetAuthenticatedUserId: vi.fn(),
+  mockMaybeSingle: vi.fn(),
+}))
 
 vi.mock('@/lib/openai/client', () => ({ chatWithTool: mockChatWithTool }))
 vi.mock('@/lib/plan-engine/generate-month', () => ({ generateFirstMonth: mockGenerateFirstMonth }))
 vi.mock('@/lib/supabase/session', () => ({ getAuthenticatedUserId: mockGetAuthenticatedUserId }))
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: () => ({
-    from: () => ({
-      insert: (...args: unknown[]) => {
-        mockInsert(...args)
-        return { select: () => ({ single: mockSingle }) }
-      },
-    }),
+    from: (table: string) => {
+      if (table === 'training_plan') {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({ maybeSingle: mockMaybeSingle }),
+            }),
+          }),
+        }
+      }
+
+      return {
+        insert: (...args: unknown[]) => {
+          mockInsert(...args)
+          return { select: () => ({ single: mockSingle }) }
+        },
+      }
+    },
   }),
 }))
 
@@ -33,6 +52,7 @@ describe('POST /api/onboarding/chat', () => {
     mockSingle.mockReset()
     mockGetAuthenticatedUserId.mockReset()
     mockGetAuthenticatedUserId.mockResolvedValue('user-1')
+    mockMaybeSingle.mockReset()
   })
 
   it('returns 401 when there is no authenticated session', async () => {
@@ -88,7 +108,7 @@ describe('POST /api/onboarding/chat', () => {
     expect(body).toEqual({ type: 'completed', trainingPlanId: 'plan-1' })
   })
 
-  it('returns a friendly message instead of a 500 when plan generation fails', async () => {
+  it('redirects to the existing plan when one already exists for this month', async () => {
     const profile = {
       goal: 'hipertrofia',
       level: 'iniciante',
@@ -99,6 +119,32 @@ describe('POST /api/onboarding/chat', () => {
     mockChatWithTool.mockResolvedValue({ type: 'tool_call', profile })
     mockSingle.mockResolvedValue({ data: { id: 'profile-1' }, error: null })
     mockGenerateFirstMonth.mockRejectedValue(new Error('duplicate key value violates unique constraint'))
+    mockMaybeSingle.mockResolvedValue({ data: { id: 'existing-plan-1' }, error: null })
+
+    const request = new Request('http://localhost/api/onboarding/chat', {
+      method: 'POST',
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'Pronto' }] }),
+    })
+
+    const response = await POST(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ type: 'completed', trainingPlanId: 'existing-plan-1' })
+  })
+
+  it('returns a friendly message when generation fails and no existing plan is found', async () => {
+    const profile = {
+      goal: 'hipertrofia',
+      level: 'iniciante',
+      days_per_week: 3,
+      equipment: 'academia completa',
+      restrictions: null,
+    }
+    mockChatWithTool.mockResolvedValue({ type: 'tool_call', profile })
+    mockSingle.mockResolvedValue({ data: { id: 'profile-1' }, error: null })
+    mockGenerateFirstMonth.mockRejectedValue(new Error('some other failure'))
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null })
 
     const request = new Request('http://localhost/api/onboarding/chat', {
       method: 'POST',
