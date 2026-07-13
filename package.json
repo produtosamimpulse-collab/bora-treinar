@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync:exercises": "tsx scripts/sync-exercises.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -29,6 +30,7 @@
     "pg": "^8.22.0",
     "supabase": "^2.109.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.0",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.10"
