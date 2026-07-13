@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 
 type Message = { role: 'user' | 'assistant'; content: string }
 
@@ -12,6 +11,7 @@ export default function OnboardingPage() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   async function sendMessage() {
@@ -23,25 +23,32 @@ export default function OnboardingPage() {
     setMessages(nextMessages)
     setInput('')
     setLoading(true)
+    setError(null)
 
-    const supabase = createBrowserSupabaseClient()
-    const { data: userData } = await supabase.auth.getUser()
+    try {
+      const response = await fetch('/api/onboarding/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: nextMessages }),
+      })
 
-    const response = await fetch('/api/onboarding/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: userData.user?.id, messages: nextMessages }),
-    })
+      if (!response.ok) {
+        throw new Error('Falha ao enviar mensagem')
+      }
 
-    const result = await response.json()
-    setLoading(false)
+      const result = await response.json()
 
-    if (result.type === 'completed') {
-      router.push(`/plano?id=${result.trainingPlanId}`)
-      return
+      if (result.type === 'completed') {
+        router.push(`/plano?id=${result.trainingPlanId}`)
+        return
+      }
+
+      setMessages((current) => [...current, { role: 'assistant', content: result.content }])
+    } catch {
+      setError('Algo deu errado. Tente enviar de novo.')
+    } finally {
+      setLoading(false)
     }
-
-    setMessages((current) => [...current, { role: 'assistant', content: result.content }])
   }
 
   return (
@@ -64,6 +71,7 @@ export default function OnboardingPage() {
           </div>
         ))}
         {loading && <p className="text-sm text-foreground/50">Digitando...</p>}
+        {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
 
       <div className="mt-4 flex gap-2">
