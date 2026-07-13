@@ -22,13 +22,23 @@ export default function Home() {
           Treinos montados, acompanhados e ajustados por IA, mês a mês, do seu jeito.
         </p>
 
-        <a
-          href="/exercicios"
-          className="mt-10 inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black transition-transform hover:scale-105"
-        >
-          Ver biblioteca de exercícios
-          <span aria-hidden>→</span>
-        </a>
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+          <a
+            href="/onboarding"
+            className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black transition-transform hover:scale-105"
+          >
+            Começar meu plano
+            <span aria-hidden>→</span>
+          </a>
+
+          <a
+            href="/exercicios"
+            className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-6 py-3 text-sm font-semibold uppercase tracking-wide text-foreground transition-transform hover:scale-105"
+          >
+            Ver biblioteca de exercícios
+            <span aria-hidden>→</span>
+          </a>
+        </div>
       </div>
     </div>
   );
