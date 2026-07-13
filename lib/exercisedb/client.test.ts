@@ -51,6 +51,28 @@ describe('fetchAllExercises', () => {
     expect(result).toHaveLength(13)
   })
 
+  it('throws instead of looping forever if pages never end', async () => {
+    const fullPage = Array.from({ length: 10 }, (_, i) => ({
+      id: String(i + 1).padStart(4, '0'),
+      name: `exercise-${i + 1}`,
+      bodyPart: 'chest',
+      equipment: 'body weight',
+      target: 'pectorals',
+      secondaryMuscles: [],
+      instructions: ['Step 1'],
+      description: 'desc',
+      difficulty: 'beginner',
+      category: 'strength',
+    }))
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => fullPage,
+    }) as unknown as typeof fetch
+
+    await expect(fetchAllExercises()).rejects.toThrow(/exceeded.*offset/i)
+  })
+
   it('throws when the API responds with an error status', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,

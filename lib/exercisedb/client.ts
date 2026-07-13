@@ -12,6 +12,7 @@ export type ExerciseDbExercise = {
 }
 
 const PAGE_SIZE = 10
+const MAX_OFFSET = 5000 // safety valve: ~500 pages, well past the ~1300-exercise catalog
 
 export async function fetchAllExercises(): Promise<ExerciseDbExercise[]> {
   const apiKey = process.env.EXERCISEDB_API_KEY
@@ -47,6 +48,10 @@ export async function fetchAllExercises(): Promise<ExerciseDbExercise[]> {
     }
 
     offset += PAGE_SIZE
+
+    if (offset > MAX_OFFSET) {
+      throw new Error(`ExerciseDB pagination exceeded ${MAX_OFFSET} offset without a final page`)
+    }
   }
 
   return all
