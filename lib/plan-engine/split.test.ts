@@ -6,22 +6,23 @@ describe('chooseSplit', () => {
     expect(chooseSplit(2).type).toBe('full_body')
     expect(chooseSplit(3).type).toBe('full_body')
     expect(chooseSplit(3).days).toHaveLength(3)
+    expect(chooseSplit(3).days[0].label).toBe('Corpo Inteiro 1')
   })
 
   it('uses upper/lower for 4 days per week', () => {
     const result = chooseSplit(4)
     expect(result.type).toBe('upper_lower')
-    expect(result.days.map((d) => d.label)).toEqual(['Upper', 'Lower', 'Upper', 'Lower'])
+    expect(result.days.map((d) => d.label)).toEqual(['Superior', 'Inferior', 'Superior', 'Inferior'])
   })
 
   it('uses push/pull/legs for 5-6 days per week', () => {
     const result5 = chooseSplit(5)
     expect(result5.type).toBe('push_pull_legs')
-    expect(result5.days.map((d) => d.label)).toEqual(['Push', 'Pull', 'Legs', 'Push', 'Pull'])
+    expect(result5.days.map((d) => d.label)).toEqual(['Empurrar', 'Puxar', 'Pernas', 'Empurrar', 'Puxar'])
 
     const result6 = chooseSplit(6)
     expect(result6.days.map((d) => d.label)).toEqual([
-      'Push', 'Pull', 'Legs', 'Push', 'Pull', 'Legs',
+      'Empurrar', 'Puxar', 'Pernas', 'Empurrar', 'Puxar', 'Pernas',
     ])
   })
 
@@ -53,8 +54,8 @@ describe('chooseSplit', () => {
 
   it('keeps triceps and biceps on separate days for push/pull splits', () => {
     const { days } = chooseSplit(6)
-    const push = days.find((d) => d.label === 'Push')!
-    const pull = days.find((d) => d.label === 'Pull')!
+    const push = days.find((d) => d.label === 'Empurrar')!
+    const pull = days.find((d) => d.label === 'Puxar')!
 
     expect(push.targets).toContain('triceps')
     expect(push.targets).not.toContain('biceps')

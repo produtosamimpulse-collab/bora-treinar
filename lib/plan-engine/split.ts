@@ -24,7 +24,7 @@ export function chooseSplit(daysPerWeek: number): { type: SplitType; days: Split
 
   if (daysPerWeek <= 3) {
     const days: SplitDay[] = Array.from({ length: daysPerWeek }, (_, i) => ({
-      label: `Full Body ${i + 1}`,
+      label: `Corpo Inteiro ${i + 1}`,
       targets: FULL_BODY_TARGETS,
     }))
     return { type: 'full_body', days }
@@ -32,18 +32,18 @@ export function chooseSplit(daysPerWeek: number): { type: SplitType; days: Split
 
   if (daysPerWeek === 4) {
     const days: SplitDay[] = [
-      { label: 'Upper', targets: UPPER_TARGETS },
-      { label: 'Lower', targets: LOWER_TARGETS },
-      { label: 'Upper', targets: UPPER_TARGETS },
-      { label: 'Lower', targets: LOWER_TARGETS },
+      { label: 'Superior', targets: UPPER_TARGETS },
+      { label: 'Inferior', targets: LOWER_TARGETS },
+      { label: 'Superior', targets: UPPER_TARGETS },
+      { label: 'Inferior', targets: LOWER_TARGETS },
     ]
     return { type: 'upper_lower', days }
   }
 
   const cycle: SplitDay[] = [
-    { label: 'Push', targets: PUSH_TARGETS },
-    { label: 'Pull', targets: PULL_TARGETS },
-    { label: 'Legs', targets: LEGS_TARGETS },
+    { label: 'Empurrar', targets: PUSH_TARGETS },
+    { label: 'Puxar', targets: PULL_TARGETS },
+    { label: 'Pernas', targets: LEGS_TARGETS },
   ]
   const days = Array.from({ length: daysPerWeek }, (_, i) => cycle[i % 3])
   return { type: 'push_pull_legs', days }
