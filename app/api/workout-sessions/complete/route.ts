@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getAuthenticatedUserId } from '@/lib/supabase/session'
 
 export async function POST(request: Request) {
-  const { userId, workoutDayId } = (await request.json()) as {
-    userId: string
-    workoutDayId: string
+  const userId = await getAuthenticatedUserId()
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  const { workoutDayId } = (await request.json()) as { workoutDayId: string }
 
   const supabase = createServerSupabaseClient()
 
