@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { translateDayLabel } from '@/lib/plan-engine/label-i18n'
 import PlanoInterativo from './PlanoInterativo'
 
 export default async function PlanoPage({
@@ -29,7 +30,7 @@ export default async function PlanoPage({
 
   const formattedDays = (days ?? []).map((day) => ({
     id: day.id,
-    dayLabel: day.day_label,
+    dayLabel: translateDayLabel(day.day_label),
     dayOfWeek: day.day_of_week,
     exercises: (
       day.workout_day_exercise as unknown as Array<{
