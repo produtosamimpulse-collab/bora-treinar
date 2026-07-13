@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { translateDayLabel } from '@/lib/plan-engine/label-i18n'
+import { determineCurrentWeek } from '@/lib/plan-engine/week-progress'
 import PlanoInterativo from './PlanoInterativo'
 
 export default async function PlanoPage({
@@ -19,13 +20,30 @@ export default async function PlanoPage({
 
   const supabase = createServerSupabaseClient()
 
+  const { data: allDays } = await supabase
+    .from('workout_day')
+    .select('id, week_number, workout_session(completed)')
+    .eq('training_plan_id', id)
+
+  const weekCompletion: Record<number, boolean> = {}
+  for (let week = 1; week <= 4; week++) {
+    const weekDays = (allDays ?? []).filter((d) => d.week_number === week)
+    weekCompletion[week] =
+      weekDays.length > 0 &&
+      weekDays.every((weekDay) =>
+        (weekDay.workout_session as unknown as { completed: boolean }[]).some((s) => s.completed)
+      )
+  }
+
+  const currentWeek = determineCurrentWeek(weekCompletion)
+
   const { data: days } = await supabase
     .from('workout_day')
     .select(
       'id, day_label, day_of_week, week_number, workout_day_exercise(id, target_sets, target_reps, exercise(id, name, name_pt))'
     )
     .eq('training_plan_id', id)
-    .eq('week_number', 1)
+    .eq('week_number', currentWeek)
     .order('day_of_week')
 
   const formattedDays = (days ?? []).map((day) => ({
@@ -63,7 +81,7 @@ export default async function PlanoPage({
       <header className="mb-10">
         <span className="mb-3 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-foreground/60">
           <span className="h-1.5 w-1.5 rounded-full bg-brand" />
-          Semana 1, calibração
+          Semana {currentWeek} de 4{currentWeek === 1 ? ', calibração' : ''}
         </span>
         <h1 className="font-display text-4xl uppercase leading-none tracking-tight sm:text-5xl">
           Seu <span className="text-brand">plano</span>

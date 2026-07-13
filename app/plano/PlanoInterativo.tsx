@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 const WEEKDAY_NAMES: Record<number, string> = {
   1: 'Segunda',
@@ -34,10 +35,8 @@ export default function PlanoInterativo({
   days: DayItem[]
   initialCompletedDayIds?: string[]
 }) {
+  const router = useRouter()
   const [openDayId, setOpenDayId] = useState<string | null>(days[0]?.id ?? null)
-  const [completedDayIds, setCompletedDayIds] = useState<Set<string>>(
-    new Set(initialCompletedDayIds)
-  )
   const [exerciseNames, setExerciseNames] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {}
     for (const day of days) {
@@ -56,39 +55,8 @@ export default function PlanoInterativo({
     }
     return initial
   })
-  const [checkedExerciseIds, setCheckedExerciseIds] = useState<Set<string>>(new Set())
   const [swapping, setSwapping] = useState<string | null>(null)
-
-  async function completeDay(dayId: string) {
-    await fetch('/api/workout-sessions/complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workoutDayId: dayId }),
-    })
-    setCompletedDayIds((current) => new Set(current).add(dayId))
-  }
-
-  function toggleExercise(day: DayItem, exerciseItemId: string) {
-    setCheckedExerciseIds((current) => {
-      const next = new Set(current)
-      if (next.has(exerciseItemId)) {
-        next.delete(exerciseItemId)
-      } else {
-        next.add(exerciseItemId)
-      }
-      return next
-    })
-  }
-
-  useEffect(() => {
-    for (const day of days) {
-      const allChecked = day.exercises.every((exercise) => checkedExerciseIds.has(exercise.id))
-      if (allChecked && !completedDayIds.has(day.id)) {
-        completeDay(day.id)
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkedExerciseIds])
+  const completedDayIds = new Set(initialCompletedDayIds)
 
   async function swapExercise(workoutDayExerciseId: string) {
     setSwapping(workoutDayExerciseId)
@@ -127,13 +95,13 @@ export default function PlanoInterativo({
             <button
               type="button"
               onClick={() => setOpenDayId(isOpen ? null : day.id)}
-              className="flex w-full items-center justify-between p-6 text-left"
+              className="flex w-full items-center justify-between p-4 text-left sm:p-6"
             >
               <div>
                 <p className="text-xs font-medium uppercase tracking-widest text-foreground/60">
                   {day.dayOfWeek ? WEEKDAY_NAMES[day.dayOfWeek] : 'Dia'}
                 </p>
-                <h2 className="font-display text-2xl uppercase">{day.dayLabel}</h2>
+                <h2 className="font-display text-xl uppercase sm:text-2xl">{day.dayLabel}</h2>
               </div>
               <span aria-hidden className="text-2xl text-brand">
                 {isOpen ? '−' : '+'}
@@ -141,23 +109,18 @@ export default function PlanoInterativo({
             </button>
 
             {isOpen && (
-              <div className="border-t border-border-subtle p-6">
+              <div className="border-t border-border-subtle p-4 sm:p-6">
                 <ul className="space-y-4">
-                  {day.exercises.map((exercise) => {
-                    const isChecked = checkedExerciseIds.has(exercise.id)
-
-                    return (
-                      <li key={exercise.id} className="flex items-center gap-4">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleExercise(day, exercise.id)}
-                          className="h-5 w-5 accent-[var(--brand)]"
-                        />
+                  {day.exercises.map((exercise) => (
+                    <li
+                      key={exercise.id}
+                      className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4"
+                    >
+                      <div className="flex items-center gap-4">
                         <img
                           src={`/api/exercises/${exerciseIds[exercise.id]}/gif`}
                           alt={exerciseNames[exercise.id]}
-                          className="h-16 w-16 rounded-lg object-cover"
+                          className="h-14 w-14 shrink-0 rounded-lg object-cover sm:h-16 sm:w-16"
                           loading="lazy"
                         />
                         <div className="flex-1">
@@ -168,24 +131,30 @@ export default function PlanoInterativo({
                             {exercise.targetSets}x{exercise.targetReps}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => swapExercise(exercise.id)}
-                          disabled={swapping === exercise.id}
-                          className="rounded-full border border-border-subtle px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-foreground/70 disabled:opacity-50"
-                        >
-                          {swapping === exercise.id ? 'Trocando...' : 'Trocar'}
-                        </button>
-                      </li>
-                    )
-                  })}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => swapExercise(exercise.id)}
+                        disabled={swapping === exercise.id}
+                        className="self-start rounded-full border border-border-subtle px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-foreground/70 disabled:opacity-50 sm:self-auto"
+                      >
+                        {swapping === exercise.id ? 'Trocando...' : 'Trocar'}
+                      </button>
+                    </li>
+                  ))}
                 </ul>
 
-                <p className="mt-6 text-center text-sm text-foreground/60">
-                  {isCompleted
-                    ? 'Treino concluído.'
-                    : 'Marque todos os exercícios para concluir o treino do dia.'}
-                </p>
+                {isCompleted ? (
+                  <p className="mt-6 text-center text-sm text-foreground/60">Treino concluído.</p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/plano/treino/${day.id}`)}
+                    className="mt-6 w-full rounded-full bg-brand py-4 text-sm font-semibold uppercase tracking-wide text-black"
+                  >
+                    Iniciar treino
+                  </button>
+                )}
               </div>
             )}
           </div>
