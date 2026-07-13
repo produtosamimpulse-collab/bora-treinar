@@ -11,6 +11,8 @@ export type ExerciseDbExercise = {
   category: string
 }
 
+const PAGE_SIZE = 10
+
 export async function fetchAllExercises(): Promise<ExerciseDbExercise[]> {
   const apiKey = process.env.EXERCISEDB_API_KEY
   const apiHost = process.env.EXERCISEDB_API_HOST
@@ -19,16 +21,33 @@ export async function fetchAllExercises(): Promise<ExerciseDbExercise[]> {
     throw new Error('Missing ExerciseDB API credentials')
   }
 
-  const response = await fetch(`https://${apiHost}/exercises?limit=2000`, {
-    headers: {
-      'X-RapidAPI-Key': apiKey,
-      'X-RapidAPI-Host': apiHost,
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`ExerciseDB request failed: ${response.status}`)
+  const headers = {
+    'X-RapidAPI-Key': apiKey,
+    'X-RapidAPI-Host': apiHost,
   }
 
-  return response.json()
+  const all: ExerciseDbExercise[] = []
+  let offset = 0
+
+  while (true) {
+    const response = await fetch(
+      `https://${apiHost}/exercises?limit=${PAGE_SIZE}&offset=${offset}`,
+      { headers }
+    )
+
+    if (!response.ok) {
+      throw new Error(`ExerciseDB request failed: ${response.status}`)
+    }
+
+    const page: ExerciseDbExercise[] = await response.json()
+    all.push(...page)
+
+    if (page.length < PAGE_SIZE) {
+      break
+    }
+
+    offset += PAGE_SIZE
+  }
+
+  return all
 }
