@@ -53,6 +53,11 @@ const BASE_PROFILE: OnboardingProfile = {
   days_per_week: 3,
   equipment: 'academia completa',
   restrictions: null,
+  session_minutes: 60,
+  age: 30,
+  sex: 'masculino',
+  training_history: null,
+  excluded_targets: [],
 }
 
 describe('generateFirstMonth', () => {

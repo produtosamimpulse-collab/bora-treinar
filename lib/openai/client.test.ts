@@ -37,6 +37,11 @@ describe('chatWithTool', () => {
       days_per_week: 4,
       equipment: 'academia completa',
       restrictions: null,
+      session_minutes: 60,
+      age: 30,
+      sex: 'masculino',
+      training_history: 'treina há 2 anos',
+      excluded_targets: [],
     }
 
     mockCreate.mockResolvedValue({

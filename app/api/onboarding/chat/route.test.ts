@@ -90,6 +90,11 @@ describe('POST /api/onboarding/chat', () => {
       days_per_week: 3,
       equipment: 'academia completa',
       restrictions: null,
+      session_minutes: 60,
+      age: 30,
+      sex: 'masculino',
+      training_history: null,
+      excluded_targets: [],
     }
     mockChatWithTool.mockResolvedValue({ type: 'tool_call', profile })
     mockSingle.mockResolvedValue({ data: { id: 'profile-1' }, error: null })
@@ -103,7 +108,16 @@ describe('POST /api/onboarding/chat', () => {
     const response = await POST(request)
     const body = await response.json()
 
-    expect(mockInsert).toHaveBeenCalledWith([expect.objectContaining({ user_id: 'user-1' })])
+    expect(mockInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        user_id: 'user-1',
+        session_minutes: 60,
+        age: 30,
+        sex: 'masculino',
+        training_history: null,
+        excluded_targets: [],
+      }),
+    ])
     expect(mockGenerateFirstMonth).toHaveBeenCalledWith(expect.anything(), 'user-1', profile)
     expect(body).toEqual({ type: 'completed', trainingPlanId: 'plan-1' })
   })
@@ -115,6 +129,11 @@ describe('POST /api/onboarding/chat', () => {
       days_per_week: 3,
       equipment: 'academia completa',
       restrictions: null,
+      session_minutes: 60,
+      age: 30,
+      sex: 'masculino',
+      training_history: null,
+      excluded_targets: [],
     }
     mockChatWithTool.mockResolvedValue({ type: 'tool_call', profile })
     mockSingle.mockResolvedValue({ data: { id: 'profile-1' }, error: null })
@@ -140,6 +159,11 @@ describe('POST /api/onboarding/chat', () => {
       days_per_week: 3,
       equipment: 'academia completa',
       restrictions: null,
+      session_minutes: 60,
+      age: 30,
+      sex: 'masculino',
+      training_history: null,
+      excluded_targets: [],
     }
     mockChatWithTool.mockResolvedValue({ type: 'tool_call', profile })
     mockSingle.mockResolvedValue({ data: { id: 'profile-1' }, error: null })

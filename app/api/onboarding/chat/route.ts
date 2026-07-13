@@ -31,6 +31,11 @@ export async function POST(request: Request) {
         days_per_week: result.profile.days_per_week,
         equipment: result.profile.equipment,
         restrictions: result.profile.restrictions,
+        session_minutes: result.profile.session_minutes,
+        age: result.profile.age,
+        sex: result.profile.sex,
+        training_history: result.profile.training_history,
+        excluded_targets: result.profile.excluded_targets,
         onboarding_transcript: messages.map((m) => `${m.role}: ${m.content}`).join('\n'),
       },
     ])
