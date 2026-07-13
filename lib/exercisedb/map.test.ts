@@ -24,6 +24,7 @@ describe('mapToExerciseRow', () => {
       muscle_group: 'waist',
       equipment: 'body weight',
       media_url: null,
+      target: 'abs',
     })
   })
 
@@ -44,5 +45,6 @@ describe('mapToExerciseRow', () => {
     const result = mapToExerciseRow(input)
 
     expect(result.equipment).toBeNull()
+    expect(result.target).toBe('abs')
   })
 })
