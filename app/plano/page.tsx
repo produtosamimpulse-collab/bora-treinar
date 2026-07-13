@@ -47,6 +47,16 @@ export default async function PlanoPage({
     })),
   }))
 
+  const dayIds = formattedDays.map((day) => day.id)
+
+  const { data: sessions } = await supabase
+    .from('workout_session')
+    .select('workout_day_id')
+    .eq('completed', true)
+    .in('workout_day_id', dayIds.length > 0 ? dayIds : [''])
+
+  const completedDayIds = (sessions ?? []).map((session) => session.workout_day_id as string)
+
   return (
     <main className="min-h-screen bg-background px-6 py-10 text-foreground sm:px-10">
       <header className="mb-10">
@@ -59,7 +69,7 @@ export default async function PlanoPage({
         </h1>
       </header>
 
-      <PlanoInterativo days={formattedDays} />
+      <PlanoInterativo days={formattedDays} initialCompletedDayIds={completedDayIds} />
     </main>
   )
 }

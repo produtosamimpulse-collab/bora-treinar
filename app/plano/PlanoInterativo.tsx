@@ -29,11 +29,15 @@ type DayItem = {
 
 export default function PlanoInterativo({
   days,
+  initialCompletedDayIds = [],
 }: {
   days: DayItem[]
+  initialCompletedDayIds?: string[]
 }) {
   const [openDayId, setOpenDayId] = useState<string | null>(days[0]?.id ?? null)
-  const [completedDayIds, setCompletedDayIds] = useState<Set<string>>(new Set())
+  const [completedDayIds, setCompletedDayIds] = useState<Set<string>>(
+    new Set(initialCompletedDayIds)
+  )
 
   async function markComplete(dayId: string) {
     // A API deriva o usuário da sessão (getAuthenticatedUserId); não
