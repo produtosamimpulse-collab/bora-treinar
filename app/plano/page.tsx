@@ -3,6 +3,20 @@ import { translateDayLabel } from '@/lib/plan-engine/label-i18n'
 import { determineCurrentWeek } from '@/lib/plan-engine/week-progress'
 import PlanoInterativo from './PlanoInterativo'
 
+type RawDay = {
+  id: string
+  day_label: string
+  day_of_week: number | null
+  week_number: number
+  workout_day_exercise: Array<{
+    id: string
+    target_sets: number
+    target_reps: number
+    exercise: { id: string; name: string; name_pt: string | null }
+  }>
+  workout_session: Array<{ completed: boolean }>
+}
+
 export default async function PlanoPage({
   searchParams,
 }: {
@@ -20,44 +34,34 @@ export default async function PlanoPage({
 
   const supabase = createServerSupabaseClient()
 
-  const { data: allDays } = await supabase
+  // Uma única consulta traz tudo (dias, exercícios e sessões das 4 semanas)
+  // em vez de 3 idas sequenciais ao banco — o volume de dados de um plano é
+  // pequeno o bastante pra filtrar/computar tudo em memória depois.
+  const { data } = await supabase
     .from('workout_day')
-    .select('id, week_number, workout_session(completed)')
+    .select(
+      'id, day_label, day_of_week, week_number, workout_day_exercise(id, target_sets, target_reps, exercise(id, name, name_pt)), workout_session(completed)'
+    )
     .eq('training_plan_id', id)
+    .order('day_of_week')
+
+  const allDays = (data ?? []) as unknown as RawDay[]
 
   const weekCompletion: Record<number, boolean> = {}
   for (let week = 1; week <= 4; week++) {
-    const weekDays = (allDays ?? []).filter((d) => d.week_number === week)
+    const weekDays = allDays.filter((day) => day.week_number === week)
     weekCompletion[week] =
-      weekDays.length > 0 &&
-      weekDays.every((weekDay) =>
-        (weekDay.workout_session as unknown as { completed: boolean }[]).some((s) => s.completed)
-      )
+      weekDays.length > 0 && weekDays.every((day) => day.workout_session.some((s) => s.completed))
   }
 
   const currentWeek = determineCurrentWeek(weekCompletion)
+  const currentWeekDays = allDays.filter((day) => day.week_number === currentWeek)
 
-  const { data: days } = await supabase
-    .from('workout_day')
-    .select(
-      'id, day_label, day_of_week, week_number, workout_day_exercise(id, target_sets, target_reps, exercise(id, name, name_pt))'
-    )
-    .eq('training_plan_id', id)
-    .eq('week_number', currentWeek)
-    .order('day_of_week')
-
-  const formattedDays = (days ?? []).map((day) => ({
+  const formattedDays = currentWeekDays.map((day) => ({
     id: day.id,
     dayLabel: translateDayLabel(day.day_label),
     dayOfWeek: day.day_of_week,
-    exercises: (
-      day.workout_day_exercise as unknown as Array<{
-        id: string
-        target_sets: number
-        target_reps: number
-        exercise: { id: string; name: string; name_pt: string | null }
-      }>
-    ).map((item) => ({
+    exercises: day.workout_day_exercise.map((item) => ({
       id: item.id,
       exerciseId: item.exercise.id,
       name: item.exercise.name_pt ?? item.exercise.name,
@@ -66,15 +70,9 @@ export default async function PlanoPage({
     })),
   }))
 
-  const dayIds = formattedDays.map((day) => day.id)
-
-  const { data: sessions } = await supabase
-    .from('workout_session')
-    .select('workout_day_id')
-    .eq('completed', true)
-    .in('workout_day_id', dayIds.length > 0 ? dayIds : [''])
-
-  const completedDayIds = (sessions ?? []).map((session) => session.workout_day_id as string)
+  const completedDayIds = currentWeekDays
+    .filter((day) => day.workout_session.some((s) => s.completed))
+    .map((day) => day.id)
 
   return (
     <main className="min-h-screen bg-background px-6 py-10 text-foreground sm:px-10">
