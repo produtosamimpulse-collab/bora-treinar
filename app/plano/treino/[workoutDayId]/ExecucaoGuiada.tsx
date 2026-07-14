@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 type Exercise = {
@@ -35,6 +35,7 @@ export default function ExecucaoGuiada({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [monthCompleted, setMonthCompleted] = useState(false)
+  const audioRef = useRef<HTMLAudioElement>(null)
 
   const currentExercise = exercises[exerciseIndex]
   const isLastSetOfExercise = currentExercise ? setNumber >= currentExercise.targetSets : false
@@ -53,6 +54,67 @@ export default function ExecucaoGuiada({
     const timeout = setTimeout(() => setSecondsLeft((s) => s - 1), 1000)
     return () => clearTimeout(timeout)
   }, [resting, secondsLeft])
+
+  // Registra os controles do "mini player" uma vez só - assim, apertar
+  // pausar/parar na tela de bloqueio pula o descanso em vez de travar.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) {
+      return
+    }
+
+    const skipRest = () => setResting(false)
+
+    try {
+      navigator.mediaSession.setActionHandler('pause', skipRest)
+      navigator.mediaSession.setActionHandler('stop', skipRest)
+      navigator.mediaSession.setActionHandler('play', () => {
+        audioRef.current?.play().catch(() => {})
+      })
+    } catch {
+      // nem todo navegador suporta todas as ações
+    }
+
+    return () => {
+      try {
+        navigator.mediaSession.setActionHandler('pause', null)
+        navigator.mediaSession.setActionHandler('stop', null)
+        navigator.mediaSession.setActionHandler('play', null)
+      } catch {
+        // ignora
+      }
+    }
+  }, [])
+
+  // Toca um áudio silencioso em loop enquanto descansa - é o que faz o
+  // sistema mostrar um "mini player" persistente na tela de bloqueio/barra
+  // de notificações, mesmo com o app em segundo plano. Some quando o
+  // descanso acaba, é pulado, ou o app é fechado de verdade.
+  useEffect(() => {
+    if (resting) {
+      audioRef.current?.play().catch(() => {})
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'playing'
+      }
+    } else {
+      audioRef.current?.pause()
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'none'
+        navigator.mediaSession.metadata = null
+      }
+    }
+  }, [resting])
+
+  useEffect(() => {
+    if (!resting || !('mediaSession' in navigator)) {
+      return
+    }
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: `Descanso: ${secondsLeft}s`,
+      artist: dayLabel,
+      album: 'Bora Treinar!',
+    })
+  }, [resting, secondsLeft, dayLabel])
 
   async function saveSet() {
     if (!currentExercise) {
@@ -150,6 +212,8 @@ export default function ExecucaoGuiada({
 
   return (
     <main className="flex min-h-dvh flex-col bg-background px-4 py-6 text-foreground sm:px-10">
+      <audio ref={audioRef} src="/silence.wav" loop preload="auto" className="hidden" />
+
       <header className="mb-6">
         <p className="text-xs font-medium uppercase tracking-widest text-foreground/60">
           {dayLabel}
