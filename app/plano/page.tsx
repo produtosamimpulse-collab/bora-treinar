@@ -26,7 +26,7 @@ export default async function PlanoPage({
 
   if (!id) {
     return (
-      <main className="min-h-screen bg-background p-6 text-foreground">
+      <main className="min-h-dvh bg-background p-6 text-foreground">
         <p>Nenhum plano encontrado.</p>
       </main>
     )
@@ -75,7 +75,7 @@ export default async function PlanoPage({
     .map((day) => day.id)
 
   return (
-    <main className="min-h-screen bg-background px-6 py-10 text-foreground sm:px-10">
+    <main className="min-h-dvh bg-background px-6 py-10 text-foreground sm:px-10">
       <header className="mb-10">
         <span className="mb-3 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-foreground/60">
           <span className="h-1.5 w-1.5 rounded-full bg-brand" />

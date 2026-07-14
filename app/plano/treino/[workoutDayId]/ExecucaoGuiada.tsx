@@ -94,14 +94,14 @@ export default function ExecucaoGuiada({
 
   if (!currentExercise) {
     return (
-      <main className="min-h-screen bg-background p-6 text-foreground">
+      <main className="min-h-dvh bg-background p-6 text-foreground">
         <p>Nenhum exercício neste treino.</p>
       </main>
     )
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-background px-4 py-6 text-foreground sm:px-10">
+    <main className="flex min-h-dvh flex-col bg-background px-4 py-6 text-foreground sm:px-10">
       <header className="mb-6">
         <p className="text-xs font-medium uppercase tracking-widest text-foreground/60">
           {dayLabel}

@@ -20,7 +20,7 @@ export default async function TreinoPage({
 
   if (!day) {
     return (
-      <main className="min-h-screen bg-background p-6 text-foreground">
+      <main className="min-h-dvh bg-background p-6 text-foreground">
         <p>Treino não encontrado.</p>
       </main>
     )

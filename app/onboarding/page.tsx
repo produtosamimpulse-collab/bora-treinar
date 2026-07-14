@@ -52,7 +52,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col bg-background px-6 py-10 text-foreground">
+    <main className="mx-auto flex h-dvh max-w-xl flex-col bg-background px-6 py-10 text-foreground">
       <h1 className="mb-6 font-display text-3xl uppercase leading-none tracking-tight">
         Vamos <span className="text-brand">te conhecer</span>
       </h1>

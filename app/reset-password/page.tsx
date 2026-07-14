@@ -26,7 +26,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6 text-foreground">
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-6 text-foreground">
       <div
         aria-hidden
         className="pointer-events-none absolute left-1/2 top-1/4 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-brand/25 blur-[110px]"
