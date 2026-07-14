@@ -3,14 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const {
   mockChatWithTool,
   mockGenerateFirstMonth,
-  mockInsert,
+  mockUpsert,
   mockSingle,
   mockGetAuthenticatedUserId,
   mockMaybeSingle,
 } = vi.hoisted(() => ({
   mockChatWithTool: vi.fn(),
   mockGenerateFirstMonth: vi.fn(),
-  mockInsert: vi.fn(),
+  mockUpsert: vi.fn(),
   mockSingle: vi.fn(),
   mockGetAuthenticatedUserId: vi.fn(),
   mockMaybeSingle: vi.fn(),
@@ -33,8 +33,8 @@ vi.mock('@/lib/supabase/server', () => ({
       }
 
       return {
-        insert: (...args: unknown[]) => {
-          mockInsert(...args)
+        upsert: (...args: unknown[]) => {
+          mockUpsert(...args)
           return { select: () => ({ single: mockSingle }) }
         },
       }
@@ -48,7 +48,7 @@ describe('POST /api/onboarding/chat', () => {
   beforeEach(() => {
     mockChatWithTool.mockReset()
     mockGenerateFirstMonth.mockReset()
-    mockInsert.mockReset()
+    mockUpsert.mockReset()
     mockSingle.mockReset()
     mockGetAuthenticatedUserId.mockReset()
     mockGetAuthenticatedUserId.mockResolvedValue('user-1')
@@ -108,16 +108,19 @@ describe('POST /api/onboarding/chat', () => {
     const response = await POST(request)
     const body = await response.json()
 
-    expect(mockInsert).toHaveBeenCalledWith([
-      expect.objectContaining({
-        user_id: 'user-1',
-        session_minutes: 60,
-        age: 30,
-        sex: 'masculino',
-        training_history: null,
-        excluded_targets: [],
-      }),
-    ])
+    expect(mockUpsert).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          user_id: 'user-1',
+          session_minutes: 60,
+          age: 30,
+          sex: 'masculino',
+          training_history: null,
+          excluded_targets: [],
+        }),
+      ],
+      { onConflict: 'user_id' }
+    )
     expect(mockGenerateFirstMonth).toHaveBeenCalledWith(expect.anything(), 'user-1', profile)
     expect(body).toEqual({ type: 'completed', trainingPlanId: 'plan-1' })
   })

@@ -129,15 +129,23 @@ export default async function PlanoPage({
 
   return (
     <main className="min-h-dvh bg-background px-6 py-10 text-foreground sm:px-10">
-      <header className="mb-10">
-        <span className="mb-3 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-foreground/60">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand" />
-          Semana {currentWeek} de 4
-          {currentWeekType && WEEK_TYPE_LABEL[currentWeekType] ? `, ${WEEK_TYPE_LABEL[currentWeekType]}` : ''}
-        </span>
-        <h1 className="font-display text-4xl uppercase leading-none tracking-tight sm:text-5xl">
-          Seu <span className="text-brand">plano</span>
-        </h1>
+      <header className="mb-10 flex items-start justify-between gap-4">
+        <div>
+          <span className="mb-3 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-foreground/60">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+            Semana {currentWeek} de 4
+            {currentWeekType && WEEK_TYPE_LABEL[currentWeekType] ? `, ${WEEK_TYPE_LABEL[currentWeekType]}` : ''}
+          </span>
+          <h1 className="font-display text-4xl uppercase leading-none tracking-tight sm:text-5xl">
+            Seu <span className="text-brand">plano</span>
+          </h1>
+        </div>
+        <a
+          href="/trocar-senha"
+          className="mt-1 shrink-0 text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
+        >
+          Trocar senha
+        </a>
       </header>
 
       <PlanoInterativo days={formattedDays} initialCompletedDayIds={completedDayIds} />
