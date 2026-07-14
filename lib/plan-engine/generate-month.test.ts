@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { generateFirstMonth } from './generate-month'
 import type { OnboardingProfile } from '../openai/client'
 
@@ -8,7 +9,9 @@ vi.mock('./weekly-selection', () => ({
   selectExercisesForWeek: mockSelectExercisesForWeek,
 }))
 
-function makeSupabaseMock() {
+type SupabaseMock = SupabaseClient & { insertedRows: Record<string, unknown[]> }
+
+function makeSupabaseMock(): SupabaseMock {
   const insertedRows: Record<string, unknown[]> = {}
 
   function makeTable(name: string) {
@@ -33,7 +36,7 @@ function makeSupabaseMock() {
   }
 
   const from = vi.fn((name: string) => makeTable(name))
-  return { from, insertedRows } as never
+  return { from, insertedRows } as unknown as SupabaseMock
 }
 
 const BASE_PROFILE: OnboardingProfile = {

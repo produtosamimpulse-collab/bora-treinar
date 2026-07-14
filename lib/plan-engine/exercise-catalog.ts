@@ -7,7 +7,7 @@ export type CatalogEntry = {
   exclude?: string[]
 }
 
-export const EXERCISE_CATALOG: CatalogEntry[] = [
+const EXERCISE_CATALOG: CatalogEntry[] = [
   // Peito
   { namePt: 'Supino inclinado', mechanic: 'composto', keywords: ['incline bench press', 'incline barbell press', 'incline dumbbell press', 'incline smith machine press'] },
   { namePt: 'Supino declinado', mechanic: 'composto', keywords: ['decline bench press', 'decline barbell press', 'decline dumbbell press', 'decline smith machine press'] },

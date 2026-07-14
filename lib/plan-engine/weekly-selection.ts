@@ -117,7 +117,7 @@ export function planWeekExercises(
   return result
 }
 
-export async function fetchCandidatesForDay(
+async function fetchCandidatesForDay(
   supabase: SupabaseClient,
   day: SplitDay,
   excludedTargets: string[]
