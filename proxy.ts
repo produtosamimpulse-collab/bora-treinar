@@ -26,11 +26,15 @@ export async function proxy(request: NextRequest) {
     }
   )
 
+  // getSession() só decodifica o cookie localmente (sem chamar o Supabase),
+  // trocando um pouco de rigor (getUser() revalida o token no servidor a
+  // cada request) por navegação bem mais rápida — aceitável aqui porque o
+  // app é de uso pessoal.
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  if (!user) {
+  if (!session) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
