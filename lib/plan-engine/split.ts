@@ -1,4 +1,4 @@
-export type SplitType = 'full_body' | 'upper_lower' | 'push_pull_legs'
+export type SplitType = 'full_body' | 'upper_lower'
 
 export type SplitDay = {
   label: string
@@ -13,9 +13,6 @@ export type SplitDay = {
 const FULL_BODY_TARGETS = ['pectorals', 'lats', 'quads', 'delts', 'abs', 'glutes', 'hamstrings']
 const UPPER_TARGETS = ['pectorals', 'lats', 'upper back', 'delts', 'triceps', 'biceps', 'traps']
 const LOWER_TARGETS = ['quads', 'hamstrings', 'glutes', 'calves', 'abs', 'adductors']
-const PUSH_TARGETS = ['pectorals', 'delts', 'triceps']
-const PULL_TARGETS = ['lats', 'upper back', 'biceps', 'forearms', 'traps']
-const LEGS_TARGETS = ['quads', 'hamstrings', 'glutes', 'calves', 'abs']
 
 export function chooseSplit(daysPerWeek: number): { type: SplitType; days: SplitDay[] } {
   if (daysPerWeek < 1 || daysPerWeek > 7) {
@@ -30,21 +27,14 @@ export function chooseSplit(daysPerWeek: number): { type: SplitType; days: Split
     return { type: 'full_body', days }
   }
 
-  if (daysPerWeek === 4) {
-    const days: SplitDay[] = [
-      { label: 'Peito, Costas e Ombros', targets: UPPER_TARGETS },
-      { label: 'Pernas e Glúteos', targets: LOWER_TARGETS },
-      { label: 'Peito, Costas e Ombros', targets: UPPER_TARGETS },
-      { label: 'Pernas e Glúteos', targets: LOWER_TARGETS },
-    ]
-    return { type: 'upper_lower', days }
-  }
-
-  const cycle: SplitDay[] = [
-    { label: 'Peito, Ombros e Tríceps', targets: PUSH_TARGETS },
-    { label: 'Costas e Bíceps', targets: PULL_TARGETS },
-    { label: 'Pernas e Glúteos', targets: LEGS_TARGETS },
-  ]
-  const days = Array.from({ length: daysPerWeek }, (_, i) => cycle[i % 3])
-  return { type: 'push_pull_legs', days }
+  // Alterna superior/inferior pra qualquer frequência de 4+ dias, em vez de
+  // um ciclo push/pull/legs de 3 dias — que em frequências não múltiplas de
+  // 3 (como 5 dias) sobrecarrega a parte superior do corpo (2x push + 2x
+  // pull contra só 1x legs) e deixa pernas malfeitas.
+  const days: SplitDay[] = Array.from({ length: daysPerWeek }, (_, i) =>
+    i % 2 === 0
+      ? { label: 'Peito, Costas e Ombros', targets: UPPER_TARGETS }
+      : { label: 'Pernas e Glúteos', targets: LOWER_TARGETS }
+  )
+  return { type: 'upper_lower', days }
 }

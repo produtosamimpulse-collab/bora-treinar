@@ -20,26 +20,50 @@ describe('chooseSplit', () => {
     ])
   })
 
-  it('uses push/pull/legs for 5-6 days per week', () => {
+  // Regressão: um ciclo push/pull/legs de 3 dias não divide igualmente em
+  // frequências como 5 dias (2 push + 2 pull + 1 legs), sobrecarregando a
+  // parte superior do corpo. Alternar superior/inferior mantém o equilíbrio
+  // em qualquer frequência de 4 ou mais dias.
+  it('alternates upper/lower for 5, 6 and 7 days per week instead of clustering upper-body days', () => {
     const result5 = chooseSplit(5)
-    expect(result5.type).toBe('push_pull_legs')
+    expect(result5.type).toBe('upper_lower')
     expect(result5.days.map((d) => d.label)).toEqual([
-      'Peito, Ombros e Tríceps',
-      'Costas e Bíceps',
+      'Peito, Costas e Ombros',
       'Pernas e Glúteos',
-      'Peito, Ombros e Tríceps',
-      'Costas e Bíceps',
+      'Peito, Costas e Ombros',
+      'Pernas e Glúteos',
+      'Peito, Costas e Ombros',
     ])
 
     const result6 = chooseSplit(6)
     expect(result6.days.map((d) => d.label)).toEqual([
-      'Peito, Ombros e Tríceps',
-      'Costas e Bíceps',
+      'Peito, Costas e Ombros',
       'Pernas e Glúteos',
-      'Peito, Ombros e Tríceps',
-      'Costas e Bíceps',
+      'Peito, Costas e Ombros',
+      'Pernas e Glúteos',
+      'Peito, Costas e Ombros',
       'Pernas e Glúteos',
     ])
+
+    const result7 = chooseSplit(7)
+    expect(result7.days.map((d) => d.label)).toEqual([
+      'Peito, Costas e Ombros',
+      'Pernas e Glúteos',
+      'Peito, Costas e Ombros',
+      'Pernas e Glúteos',
+      'Peito, Costas e Ombros',
+      'Pernas e Glúteos',
+      'Peito, Costas e Ombros',
+    ])
+  })
+
+  it('never lets upper-body days outnumber lower-body days by more than one, for any frequency', () => {
+    for (const daysPerWeek of [4, 5, 6, 7]) {
+      const { days } = chooseSplit(daysPerWeek)
+      const upperCount = days.filter((d) => d.label === 'Peito, Costas e Ombros').length
+      const lowerCount = days.filter((d) => d.label === 'Pernas e Glúteos').length
+      expect(Math.abs(upperCount - lowerCount)).toBeLessThanOrEqual(1)
+    }
   })
 
   it('throws for an out-of-range number of days', () => {
@@ -66,16 +90,5 @@ describe('chooseSplit', () => {
         }
       }
     }
-  })
-
-  it('keeps triceps and biceps on separate days for push/pull splits', () => {
-    const { days } = chooseSplit(6)
-    const push = days.find((d) => d.label === 'Peito, Ombros e Tríceps')!
-    const pull = days.find((d) => d.label === 'Costas e Bíceps')!
-
-    expect(push.targets).toContain('triceps')
-    expect(push.targets).not.toContain('biceps')
-    expect(pull.targets).toContain('biceps')
-    expect(pull.targets).not.toContain('triceps')
   })
 })
