@@ -33,6 +33,8 @@ export default function ExecucaoGuiada({
   const [resting, setResting] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(restSeconds)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [monthCompleted, setMonthCompleted] = useState(false)
 
   const currentExercise = exercises[exerciseIndex]
   const isLastSetOfExercise = currentExercise ? setNumber >= currentExercise.targetSets : false
@@ -58,9 +60,10 @@ export default function ExecucaoGuiada({
     }
 
     setSaving(true)
+    setError(null)
 
     try {
-      await fetch(`/api/workout-day/${workoutDayId}/log-set`, {
+      const logResponse = await fetch(`/api/workout-day/${workoutDayId}/log-set`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -72,12 +75,32 @@ export default function ExecucaoGuiada({
         }),
       })
 
+      if (!logResponse.ok) {
+        setError('Não deu pra salvar essa série. Confira sua conexão e tente de novo.')
+        return
+      }
+
       setReps('')
       setLoad('')
       setRir('')
 
       if (isLastSetOfExercise && isLastExercise) {
-        await fetch(`/api/workout-day/${workoutDayId}/finish`, { method: 'POST' })
+        const finishResponse = await fetch(`/api/workout-day/${workoutDayId}/finish`, {
+          method: 'POST',
+        })
+
+        if (!finishResponse.ok) {
+          setError('A série foi salva, mas não deu pra concluir o treino. Tente de novo.')
+          return
+        }
+
+        const finishBody = (await finishResponse.json()) as { monthCompleted: boolean }
+
+        if (finishBody.monthCompleted) {
+          setMonthCompleted(true)
+          return
+        }
+
         router.push('/plano')
         return
       }
@@ -90,9 +113,31 @@ export default function ExecucaoGuiada({
         setResting(true)
         setSecondsLeft(restSeconds)
       }
+    } catch {
+      setError('Não deu pra salvar essa série. Confira sua conexão e tente de novo.')
     } finally {
       setSaving(false)
     }
+  }
+
+  if (monthCompleted) {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-6 text-center text-foreground">
+        <p className="text-xs font-medium uppercase tracking-widest text-brand">Mês concluído</p>
+        <h1 className="font-display text-4xl uppercase leading-none sm:text-5xl">Parabéns!</h1>
+        <p className="max-w-sm text-sm text-foreground/70">
+          Você terminou as 4 semanas do mês. Já preparei o mês seguinte, começando com uma semana
+          de recuperação.
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push('/plano')}
+          className="mt-4 min-h-11 w-full max-w-xs rounded-full bg-brand py-4 text-sm font-semibold uppercase tracking-wide text-black"
+        >
+          Ver novo plano
+        </button>
+      </main>
+    )
   }
 
   if (!currentExercise) {
@@ -180,6 +225,8 @@ export default function ExecucaoGuiada({
               className="min-h-11 w-full rounded-xl border border-border-subtle bg-surface p-4 text-lg"
             />
           </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
 
           <button
             type="button"

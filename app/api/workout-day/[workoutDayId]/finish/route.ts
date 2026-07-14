@@ -63,8 +63,12 @@ export async function POST(
     }
   }
 
+  let monthCompleted = false
+
   if (day.week_number === 4) {
     if (await isWeekComplete(supabase, day.training_plan_id, 4)) {
+      monthCompleted = true
+
       const { data: plan } = await supabase
         .from('training_plan')
         .select('month_number')
@@ -98,5 +102,5 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, monthCompleted })
 }

@@ -194,7 +194,8 @@ describe('POST /api/workout-day/:workoutDayId/finish', () => {
       error: null,
     })
 
-    await POST(makeRequest(), { params: Promise.resolve({ workoutDayId: 'day-1' }) })
+    const response = await POST(makeRequest(), { params: Promise.resolve({ workoutDayId: 'day-1' }) })
+    const body = await response.json()
 
     expect(mockGenerateNextMonth).toHaveBeenCalledWith(
       expect.anything(),
@@ -202,6 +203,7 @@ describe('POST /api/workout-day/:workoutDayId/finish', () => {
       expect.objectContaining({ goal: 'hipertrofia', days_per_week: 3 }),
       1
     )
+    expect(body).toEqual({ ok: true, monthCompleted: true })
   })
 
   it('does not generate the next month if other week-4 days remain incomplete', async () => {
@@ -222,8 +224,10 @@ describe('POST /api/workout-day/:workoutDayId/finish', () => {
       error: null,
     })
 
-    await POST(makeRequest(), { params: Promise.resolve({ workoutDayId: 'day-1' }) })
+    const response = await POST(makeRequest(), { params: Promise.resolve({ workoutDayId: 'day-1' }) })
+    const body = await response.json()
 
     expect(mockGenerateNextMonth).not.toHaveBeenCalled()
+    expect(body).toEqual({ ok: true, monthCompleted: false })
   })
 })
