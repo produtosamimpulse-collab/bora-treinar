@@ -8,6 +8,9 @@ type RawDay = {
   day_label: string
   day_of_week: number | null
   week_number: number
+  cardio_minutes: number | null
+  cardio_intensity: string | null
+  cardio_exercise: { name: string; name_pt: string | null } | null
   workout_day_exercise: Array<{
     id: string
     target_sets: number
@@ -40,7 +43,7 @@ export default async function PlanoPage({
   const { data } = await supabase
     .from('workout_day')
     .select(
-      'id, day_label, day_of_week, week_number, workout_day_exercise(id, target_sets, target_reps, exercise(id, name, name_pt)), workout_session(completed)'
+      'id, day_label, day_of_week, week_number, cardio_minutes, cardio_intensity, cardio_exercise:cardio_exercise_id(name, name_pt), workout_day_exercise(id, target_sets, target_reps, exercise(id, name, name_pt)), workout_session(completed)'
     )
     .eq('training_plan_id', id)
     .order('day_of_week')
@@ -68,6 +71,13 @@ export default async function PlanoPage({
       targetSets: item.target_sets,
       targetReps: item.target_reps,
     })),
+    cardio: day.cardio_exercise
+      ? {
+          name: day.cardio_exercise.name_pt ?? day.cardio_exercise.name,
+          minutes: day.cardio_minutes,
+          intensity: day.cardio_intensity,
+        }
+      : null,
   }))
 
   const completedDayIds = currentWeekDays

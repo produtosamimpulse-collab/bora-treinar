@@ -21,11 +21,18 @@ type ExerciseItem = {
   targetReps: number
 }
 
+type CardioItem = {
+  name: string
+  minutes: number | null
+  intensity: string | null
+}
+
 type DayItem = {
   id: string
   dayLabel: string
   dayOfWeek: number | null
   exercises: ExerciseItem[]
+  cardio: CardioItem | null
 }
 
 export default function PlanoInterativo({
@@ -143,6 +150,18 @@ export default function PlanoInterativo({
                     </li>
                   ))}
                 </ul>
+
+                {day.cardio && (
+                  <div className="mt-6 rounded-xl border border-border-subtle bg-background p-4">
+                    <p className="text-xs font-medium uppercase tracking-widest text-brand">
+                      Depois do treino
+                    </p>
+                    <p className="mt-1 text-sm">
+                      {day.cardio.minutes}min de {day.cardio.name}
+                      {day.cardio.intensity ? `, intensidade ${day.cardio.intensity}` : ''}
+                    </p>
+                  </div>
+                )}
 
                 {isCompleted ? (
                   <p className="mt-6 text-center text-sm text-foreground/60">Treino concluído.</p>

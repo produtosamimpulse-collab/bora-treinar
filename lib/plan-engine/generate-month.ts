@@ -3,6 +3,7 @@ import type { OnboardingProfile } from '../openai/client'
 import { chooseSplit } from './split'
 import { selectExercisesForWeek } from './weekly-selection'
 import { getVolumeForGoal, getWeeklyVolumeRange, getTargetRir } from './volume-table'
+import { getCardioPrescription, selectCardioExercise } from './cardio-table'
 import { assignWeekdays } from './weekdays'
 
 export async function generateFirstMonth(
@@ -15,6 +16,8 @@ export async function generateFirstMonth(
   const volumeRange = getWeeklyVolumeRange(profile.level)
   const targetRir = getTargetRir(profile.level)
   const weekdays = assignWeekdays(profile.days_per_week)
+  const cardioPrescription = getCardioPrescription(profile.goal)
+  const cardioExercise = await selectCardioExercise(supabase)
 
   const weekSelection = await selectExercisesForWeek(
     supabase,
@@ -50,6 +53,12 @@ export async function generateFirstMonth(
     for (let dayIndex = 0; dayIndex < split.days.length; dayIndex++) {
       const day = split.days[dayIndex]
 
+      // "no momento certo": cardio nunca substitui musculação, só é
+      // adicionado como orientação pra depois do treino de força daquele
+      // dia. Frequência (todo dia ou dias alternados) varia por objetivo.
+      const dayGetsCardio =
+        cardioExercise != null && (cardioPrescription.everyDay || dayIndex % 2 === 0)
+
       const { data: workoutDay, error: dayError } = await supabase
         .from('workout_day')
         .insert([
@@ -58,6 +67,9 @@ export async function generateFirstMonth(
             week_number: week,
             day_label: day.label,
             day_of_week: weekdays[dayIndex],
+            cardio_exercise_id: dayGetsCardio ? cardioExercise!.id : null,
+            cardio_minutes: dayGetsCardio ? cardioPrescription.minutes : null,
+            cardio_intensity: dayGetsCardio ? cardioPrescription.intensity : null,
           },
         ])
         .select()

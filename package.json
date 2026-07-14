@@ -10,7 +10,8 @@
     "test": "vitest run",
     "sync:exercises": "tsx scripts/sync-exercises.ts",
     "translate:exercises": "tsx scripts/translate-exercises.ts",
-    "classify:exercises": "tsx scripts/classify-exercises.ts"
+    "classify:exercises": "tsx scripts/classify-exercises.ts",
+    "classify:cardio": "tsx scripts/classify-cardio.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

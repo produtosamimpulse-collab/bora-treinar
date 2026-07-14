@@ -4,10 +4,19 @@ import { generateFirstMonth } from './generate-month'
 import type { OnboardingProfile } from '../openai/client'
 
 const mockSelectExercisesForWeek = vi.hoisted(() => vi.fn())
+const mockSelectCardioExercise = vi.hoisted(() => vi.fn())
 
 vi.mock('./weekly-selection', () => ({
   selectExercisesForWeek: mockSelectExercisesForWeek,
 }))
+
+vi.mock('./cardio-table', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./cardio-table')>()
+  return {
+    ...actual,
+    selectCardioExercise: mockSelectCardioExercise,
+  }
+})
 
 type SupabaseMock = SupabaseClient & { insertedRows: Record<string, unknown[]> }
 
@@ -63,6 +72,8 @@ describe('generateFirstMonth', () => {
       [{ id: 'ex-2', name: 'Exercise 2', target: 'quads', secondaryMuscles: [], mechanic: 'composto' }],
       [{ id: 'ex-3', name: 'Exercise 3', target: 'lats', secondaryMuscles: [], mechanic: 'composto' }],
     ])
+    mockSelectCardioExercise.mockReset()
+    mockSelectCardioExercise.mockResolvedValue({ id: 'cardio-1', name: 'Treadmill' })
 
     const result = await generateFirstMonth(supabase, 'user-1', BASE_PROFILE)
 
@@ -106,11 +117,37 @@ describe('generateFirstMonth', () => {
     expect(exerciseIdsByPosition[0].every((id) => id === 'ex-1')).toBe(true)
     expect(exerciseIdsByPosition[1].every((id) => id === 'ex-2')).toBe(true)
     expect(exerciseIdsByPosition[2].every((id) => id === 'ex-3')).toBe(true)
+
+    // hipertrofia -> everyDay: false, minutes: 12, intensity: 'leve' -> alternating
+    // days (0-indexed positions 0 and 2) carry the cardio prescription, position 1 doesn't
+    const workoutDays = supabase.insertedRows.workout_day as {
+      cardio_exercise_id: string | null
+      cardio_minutes: number | null
+      cardio_intensity: string | null
+    }[]
+    const cardioByPosition = [0, 1, 2].map(
+      (dayIndex) => workoutDays.filter((_, i) => i % 3 === dayIndex)
+    )
+    expect(
+      cardioByPosition[0].every(
+        (day) => day.cardio_exercise_id === 'cardio-1' && day.cardio_minutes === 12 && day.cardio_intensity === 'leve'
+      )
+    ).toBe(true)
+    expect(
+      cardioByPosition[1].every(
+        (day) => day.cardio_exercise_id === null && day.cardio_minutes === null && day.cardio_intensity === null
+      )
+    ).toBe(true)
+    expect(
+      cardioByPosition[2].every((day) => day.cardio_exercise_id === 'cardio-1')
+    ).toBe(true)
   })
 
   it('throws when the training_plan insert fails', async () => {
     mockSelectExercisesForWeek.mockReset()
     mockSelectExercisesForWeek.mockResolvedValue([[], [], []])
+    mockSelectCardioExercise.mockReset()
+    mockSelectCardioExercise.mockResolvedValue(null)
 
     const failingSupabase = {
       from: () => ({
