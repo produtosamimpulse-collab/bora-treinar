@@ -140,12 +140,20 @@ export default async function PlanoPage({
             Seu <span className="text-brand">plano</span>
           </h1>
         </div>
-        <a
-          href="/trocar-senha"
-          className="mt-1 shrink-0 text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
-        >
-          Trocar senha
-        </a>
+        <div className="mt-1 flex shrink-0 flex-col items-end gap-1">
+          <a
+            href="/progresso"
+            className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
+          >
+            Progresso
+          </a>
+          <a
+            href="/trocar-senha"
+            className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
+          >
+            Trocar senha
+          </a>
+        </div>
       </header>
 
       <PlanoInterativo days={formattedDays} initialCompletedDayIds={completedDayIds} />
