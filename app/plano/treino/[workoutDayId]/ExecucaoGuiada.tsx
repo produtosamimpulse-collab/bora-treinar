@@ -29,6 +29,7 @@ export default function ExecucaoGuiada({
   const [setNumber, setSetNumber] = useState(1)
   const [reps, setReps] = useState('')
   const [load, setLoad] = useState('')
+  const [rir, setRir] = useState('')
   const [resting, setResting] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(restSeconds)
   const [saving, setSaving] = useState(false)
@@ -67,11 +68,13 @@ export default function ExecucaoGuiada({
           setNumber,
           repsDone: Number(reps) || 0,
           loadKg: load ? Number(load) : null,
+          rirLogged: rir ? Number(rir) : null,
         }),
       })
 
       setReps('')
       setLoad('')
+      setRir('')
 
       if (isLastSetOfExercise && isLastExercise) {
         await fetch(`/api/workout-day/${workoutDayId}/finish`, { method: 'POST' })
@@ -160,6 +163,20 @@ export default function ExecucaoGuiada({
               placeholder={
                 currentExercise.targetLoadKg ? String(currentExercise.targetLoadKg) : 'Livre'
               }
+              className="min-h-11 w-full rounded-xl border border-border-subtle bg-surface p-4 text-lg"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-widest text-foreground/60">
+              RIR (repetições que ainda daria)
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              value={rir}
+              onChange={(e) => setRir(e.target.value)}
+              placeholder={currentExercise.targetRir ?? 'Opcional'}
               className="min-h-11 w-full rounded-xl border border-border-subtle bg-surface p-4 text-lg"
             />
           </div>

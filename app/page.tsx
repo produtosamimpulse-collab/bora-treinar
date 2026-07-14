@@ -1,4 +1,21 @@
-export default function Home() {
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getAuthenticatedUserId } from '@/lib/supabase/session'
+
+export default async function Home() {
+  const userId = await getAuthenticatedUserId()
+  let hasPlan = false
+
+  if (userId) {
+    const supabase = createServerSupabaseClient()
+    const { data } = await supabase
+      .from('training_plan')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1)
+      .maybeSingle()
+    hasPlan = data != null
+  }
+
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-background px-6 text-center text-foreground">
       <div
@@ -23,13 +40,23 @@ export default function Home() {
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-          <a
-            href="/onboarding"
-            className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black transition-transform hover:scale-105"
-          >
-            Começar meu plano
-            <span aria-hidden>→</span>
-          </a>
+          {hasPlan ? (
+            <a
+              href="/plano"
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black transition-transform hover:scale-105"
+            >
+              Ver meu plano
+              <span aria-hidden>→</span>
+            </a>
+          ) : (
+            <a
+              href="/onboarding"
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black transition-transform hover:scale-105"
+            >
+              Começar meu plano
+              <span aria-hidden>→</span>
+            </a>
+          )}
         </div>
       </div>
     </div>

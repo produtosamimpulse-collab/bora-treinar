@@ -31,11 +31,12 @@ export async function POST(
     return NextResponse.json({ error: 'Workout day not found' }, { status: 404 })
   }
 
-  const { exerciseId, setNumber, repsDone, loadKg } = (await request.json()) as {
+  const { exerciseId, setNumber, repsDone, loadKg, rirLogged } = (await request.json()) as {
     exerciseId: string
     setNumber: number
     repsDone: number
     loadKg: number | null
+    rirLogged: number | null
   }
 
   const { data: existingSession } = await supabase
@@ -68,6 +69,7 @@ export async function POST(
       set_number: setNumber,
       reps_done: repsDone,
       load_kg: loadKg,
+      rir_logged: rirLogged,
     },
   ])
 

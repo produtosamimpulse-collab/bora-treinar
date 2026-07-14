@@ -3,12 +3,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockGetAuthenticatedUserId = vi.hoisted(() => vi.fn())
 const mockDayOwnerSingle = vi.hoisted(() => vi.fn())
 const mockUpdateEq = vi.hoisted(() => vi.fn())
-const mockWeek1DaysSelect = vi.hoisted(() => vi.fn())
+const mockWeekDaysSelect = vi.hoisted(() => vi.fn())
 const mockApplyWeek1Progression = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const mockGenerateNextMonth = vi.hoisted(() => vi.fn().mockResolvedValue({ trainingPlanId: 'plan-2' }))
+const mockTrainingPlanSingle = vi.hoisted(() => vi.fn())
+const mockProfileMaybeSingle = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/supabase/session', () => ({ getAuthenticatedUserId: mockGetAuthenticatedUserId }))
 vi.mock('@/lib/plan-engine/apply-progression', () => ({
   applyWeek1Progression: mockApplyWeek1Progression,
+}))
+vi.mock('@/lib/plan-engine/generate-month', () => ({
+  generateNextMonth: mockGenerateNextMonth,
 }))
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: () => ({
@@ -16,12 +22,12 @@ vi.mock('@/lib/supabase/server', () => ({
       if (table === 'workout_day') {
         return {
           select: (columns: string) => {
-            // The "which week-1 days have a completed session" query embeds
+            // The "which week days have a completed session" query embeds
             // workout_session; the ownership-lookup query does not.
             if (columns.includes('workout_session')) {
               return {
                 eq: () => ({
-                  eq: (...args: unknown[]) => mockWeek1DaysSelect(...args),
+                  eq: (...args: unknown[]) => mockWeekDaysSelect(...args),
                 }),
               }
             }
@@ -29,13 +35,26 @@ vi.mock('@/lib/supabase/server', () => ({
           },
         }
       }
-      // table === 'workout_session'
+
+      if (table === 'workout_session') {
+        return {
+          update: () => ({
+            eq: (...args: unknown[]) => {
+              mockUpdateEq(...args)
+              return { eq: () => Promise.resolve({ error: null }) }
+            },
+          }),
+        }
+      }
+
+      if (table === 'training_plan') {
+        return { select: () => ({ eq: () => ({ single: mockTrainingPlanSingle }) }) }
+      }
+
+      // table === 'profile'
       return {
-        update: () => ({
-          eq: (...args: unknown[]) => {
-            mockUpdateEq(...args)
-            return { eq: () => Promise.resolve({ error: null }) }
-          },
+        select: () => ({
+          eq: () => ({ order: () => ({ limit: () => ({ maybeSingle: mockProfileMaybeSingle }) }) }),
         }),
       }
     },
@@ -63,8 +82,11 @@ describe('POST /api/workout-day/:workoutDayId/finish', () => {
       error: null,
     })
     mockUpdateEq.mockClear()
-    mockWeek1DaysSelect.mockReset()
+    mockWeekDaysSelect.mockReset()
     mockApplyWeek1Progression.mockClear()
+    mockGenerateNextMonth.mockClear()
+    mockTrainingPlanSingle.mockReset()
+    mockProfileMaybeSingle.mockReset()
   })
 
   it('returns 401 without a session', async () => {
@@ -92,7 +114,7 @@ describe('POST /api/workout-day/:workoutDayId/finish', () => {
   })
 
   it('marks the session complete without triggering progression if other week-1 days remain', async () => {
-    mockWeek1DaysSelect.mockResolvedValue({
+    mockWeekDaysSelect.mockResolvedValue({
       data: [
         { id: 'day-1', workout_session: [{ completed: true }] },
         { id: 'day-2', workout_session: [{ completed: false }] },
@@ -108,7 +130,7 @@ describe('POST /api/workout-day/:workoutDayId/finish', () => {
   })
 
   it('triggers progression once every week-1 day has a completed session', async () => {
-    mockWeek1DaysSelect.mockResolvedValue({
+    mockWeekDaysSelect.mockResolvedValue({
       data: [
         { id: 'day-1', workout_session: [{ completed: true }] },
         { id: 'day-2', workout_session: [{ completed: true }] },
@@ -134,7 +156,74 @@ describe('POST /api/workout-day/:workoutDayId/finish', () => {
 
     await POST(makeRequest(), { params: Promise.resolve({ workoutDayId: 'day-1' }) })
 
-    expect(mockWeek1DaysSelect).not.toHaveBeenCalled()
+    expect(mockWeekDaysSelect).not.toHaveBeenCalled()
     expect(mockApplyWeek1Progression).not.toHaveBeenCalled()
+  })
+
+  it('generates the next month once every week-4 day has a completed session', async () => {
+    mockDayOwnerSingle.mockResolvedValue({
+      data: {
+        id: 'day-4',
+        week_number: 4,
+        training_plan_id: 'plan-1',
+        training_plan: { user_id: 'user-1' },
+      },
+      error: null,
+    })
+    mockWeekDaysSelect.mockResolvedValue({
+      data: [
+        { id: 'day-4', workout_session: [{ completed: true }] },
+        { id: 'day-5', workout_session: [{ completed: true }] },
+      ],
+      error: null,
+    })
+    mockTrainingPlanSingle.mockResolvedValue({ data: { month_number: 1 }, error: null })
+    mockProfileMaybeSingle.mockResolvedValue({
+      data: {
+        goal: 'hipertrofia',
+        level: 'iniciante',
+        days_per_week: 3,
+        equipment: 'academia completa',
+        restrictions: null,
+        session_minutes: 60,
+        age: 30,
+        sex: 'masculino',
+        training_history: null,
+        excluded_targets: [],
+      },
+      error: null,
+    })
+
+    await POST(makeRequest(), { params: Promise.resolve({ workoutDayId: 'day-1' }) })
+
+    expect(mockGenerateNextMonth).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      expect.objectContaining({ goal: 'hipertrofia', days_per_week: 3 }),
+      1
+    )
+  })
+
+  it('does not generate the next month if other week-4 days remain incomplete', async () => {
+    mockDayOwnerSingle.mockResolvedValue({
+      data: {
+        id: 'day-4',
+        week_number: 4,
+        training_plan_id: 'plan-1',
+        training_plan: { user_id: 'user-1' },
+      },
+      error: null,
+    })
+    mockWeekDaysSelect.mockResolvedValue({
+      data: [
+        { id: 'day-4', workout_session: [{ completed: true }] },
+        { id: 'day-5', workout_session: [{ completed: false }] },
+      ],
+      error: null,
+    })
+
+    await POST(makeRequest(), { params: Promise.resolve({ workoutDayId: 'day-1' }) })
+
+    expect(mockGenerateNextMonth).not.toHaveBeenCalled()
   })
 })

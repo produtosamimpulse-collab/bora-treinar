@@ -6,10 +6,19 @@ import { getVolumeForGoal, getWeeklyVolumeRange, getTargetRir } from './volume-t
 import { getCardioPrescription, selectCardioExercise } from './cardio-table'
 import { assignWeekdays } from './weekdays'
 
-export async function generateFirstMonth(
+type Week1Type = 'calibracao' | 'deload'
+
+type GenerateMonthOptions = {
+  monthNumber: number
+  week1Type: Week1Type
+  referenceMonth: Date
+}
+
+async function generateMonth(
   supabase: SupabaseClient,
   userId: string,
-  profile: OnboardingProfile
+  profile: OnboardingProfile,
+  options: GenerateMonthOptions
 ): Promise<{ trainingPlanId: string }> {
   const split = chooseSplit(profile.days_per_week)
   const volume = getVolumeForGoal(profile.goal)
@@ -27,17 +36,15 @@ export async function generateFirstMonth(
     volume.exercisesPerDay
   )
 
-  const referenceMonth = new Date()
-  referenceMonth.setDate(1)
-
   const { data: trainingPlan, error: planError } = await supabase
     .from('training_plan')
     .insert([
       {
         user_id: userId,
-        reference_month: referenceMonth.toISOString().slice(0, 10),
+        reference_month: options.referenceMonth.toISOString().slice(0, 10),
         goal: profile.goal,
         periodization_phase: 'acumulacao',
+        month_number: options.monthNumber,
       },
     ])
     .select()
@@ -48,8 +55,15 @@ export async function generateFirstMonth(
   }
 
   const [minReps] = volume.reps.split('-').map(Number)
+  // Deload: mesmos exercícios, mesma faixa de carga, mas metade das séries -
+  // é o jeito mais comum de reduzir volume numa semana de recuperação sem
+  // precisar saber a carga anterior de exercícios que podem ter mudado.
+  const deloadSets = Math.max(1, Math.ceil(volume.sets / 2))
 
   for (let week = 1; week <= 4; week++) {
+    const weekType = week === 1 ? options.week1Type : 'progressao'
+    const setsForWeek = week === 1 && options.week1Type === 'deload' ? deloadSets : volume.sets
+
     for (let dayIndex = 0; dayIndex < split.days.length; dayIndex++) {
       const day = split.days[dayIndex]
 
@@ -67,6 +81,7 @@ export async function generateFirstMonth(
             week_number: week,
             day_label: day.label,
             day_of_week: weekdays[dayIndex],
+            week_type: weekType,
             cardio_exercise_id: dayGetsCardio ? cardioExercise!.id : null,
             cardio_minutes: dayGetsCardio ? cardioPrescription.minutes : null,
             cardio_intensity: dayGetsCardio ? cardioPrescription.intensity : null,
@@ -85,7 +100,7 @@ export async function generateFirstMonth(
         workout_day_id: workoutDay.id,
         exercise_id: exercise.id,
         order_index: index,
-        target_sets: volume.sets,
+        target_sets: setsForWeek,
         target_reps: minReps,
         target_load_kg: null,
         target_rir: targetRir,
@@ -102,4 +117,36 @@ export async function generateFirstMonth(
   }
 
   return { trainingPlanId: trainingPlan.id }
+}
+
+export async function generateFirstMonth(
+  supabase: SupabaseClient,
+  userId: string,
+  profile: OnboardingProfile
+): Promise<{ trainingPlanId: string }> {
+  const referenceMonth = new Date()
+  referenceMonth.setDate(1)
+
+  return generateMonth(supabase, userId, profile, {
+    monthNumber: 1,
+    week1Type: 'calibracao',
+    referenceMonth,
+  })
+}
+
+export async function generateNextMonth(
+  supabase: SupabaseClient,
+  userId: string,
+  profile: OnboardingProfile,
+  previousMonthNumber: number
+): Promise<{ trainingPlanId: string }> {
+  const referenceMonth = new Date()
+  referenceMonth.setMonth(referenceMonth.getMonth() + 1)
+  referenceMonth.setDate(1)
+
+  return generateMonth(supabase, userId, profile, {
+    monthNumber: previousMonthNumber + 1,
+    week1Type: 'deload',
+    referenceMonth,
+  })
 }

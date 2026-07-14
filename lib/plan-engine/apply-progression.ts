@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { calculateProgressiveLoad } from './progression'
+import { meetsProgressionCriteria } from './progression-criteria'
 
 export async function applyWeek1Progression(
   supabase: SupabaseClient,
@@ -14,7 +15,7 @@ export async function applyWeek1Progression(
   for (const day of week1Days ?? []) {
     const { data: exercises } = await supabase
       .from('workout_day_exercise')
-      .select('id, exercise_id, order_index')
+      .select('id, exercise_id, order_index, target_reps, target_rir')
       .eq('workout_day_id', day.id)
 
     const { data: session } = await supabase
@@ -33,7 +34,7 @@ export async function applyWeek1Progression(
     for (const exercise of exercises ?? []) {
       const { data: sets } = await supabase
         .from('workout_session_set')
-        .select('load_kg')
+        .select('load_kg, reps_done, rir_logged')
         .eq('workout_session_id', session.id)
         .eq('exercise_id', exercise.exercise_id)
 
@@ -46,6 +47,19 @@ export async function applyWeek1Progression(
       }
 
       const baseLoad = Math.max(...loads)
+
+      // Só aumenta a carga se o desempenho registrado justificar: todas as
+      // séries completando o topo da faixa de repetições com RIR igual ou
+      // menor que o prescrito. Sem isso, mantém a mesma carga da semana
+      // anterior em vez de progredir às cegas.
+      const criteriaMet = meetsProgressionCriteria(
+        (sets ?? []).map((set) => ({
+          repsDone: set.reps_done as number,
+          rirLogged: set.rir_logged as number | null,
+        })),
+        exercise.target_reps as number,
+        exercise.target_rir as string
+      )
 
       for (const week of [2, 3, 4] as const) {
         const { data: futureDay } = await supabase
@@ -71,7 +85,7 @@ export async function applyWeek1Progression(
           continue
         }
 
-        const newLoad = calculateProgressiveLoad(baseLoad, week)
+        const newLoad = criteriaMet ? calculateProgressiveLoad(baseLoad, week) : baseLoad
 
         await supabase
           .from('workout_day_exercise')

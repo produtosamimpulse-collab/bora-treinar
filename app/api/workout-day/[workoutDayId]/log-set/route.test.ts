@@ -65,7 +65,7 @@ describe('POST /api/workout-day/:workoutDayId/log-set', () => {
     })
 
     const response = await POST(
-      makeRequest({ exerciseId: 'ex-1', setNumber: 1, repsDone: 10, loadKg: 40 }),
+      makeRequest({ exerciseId: 'ex-1', setNumber: 1, repsDone: 10, loadKg: 40, rirLogged: 2 }),
       { params: Promise.resolve({ workoutDayId: 'day-1' }) }
     )
 
@@ -77,13 +77,20 @@ describe('POST /api/workout-day/:workoutDayId/log-set', () => {
     mockSessionInsertSingle.mockResolvedValue({ data: { id: 'session-1' }, error: null })
 
     const response = await POST(
-      makeRequest({ exerciseId: 'ex-1', setNumber: 1, repsDone: 10, loadKg: 40 }),
+      makeRequest({ exerciseId: 'ex-1', setNumber: 1, repsDone: 10, loadKg: 40, rirLogged: 2 }),
       { params: Promise.resolve({ workoutDayId: 'day-1' }) }
     )
     const body = await response.json()
 
     expect(mockSetInsert).toHaveBeenCalledWith([
-      { workout_session_id: 'session-1', exercise_id: 'ex-1', set_number: 1, reps_done: 10, load_kg: 40 },
+      {
+        workout_session_id: 'session-1',
+        exercise_id: 'ex-1',
+        set_number: 1,
+        reps_done: 10,
+        load_kg: 40,
+        rir_logged: 2,
+      },
     ])
     expect(body).toEqual({ sessionId: 'session-1' })
   })
@@ -92,7 +99,7 @@ describe('POST /api/workout-day/:workoutDayId/log-set', () => {
     mockSessionMaybeSingle.mockResolvedValue({ data: { id: 'session-existing' }, error: null })
 
     const response = await POST(
-      makeRequest({ exerciseId: 'ex-1', setNumber: 2, repsDone: 8, loadKg: 42.5 }),
+      makeRequest({ exerciseId: 'ex-1', setNumber: 2, repsDone: 8, loadKg: 42.5, rirLogged: 1 }),
       { params: Promise.resolve({ workoutDayId: 'day-1' }) }
     )
     const body = await response.json()

@@ -1,7 +1,26 @@
 import { NextResponse } from 'next/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getAuthenticatedUserId } from '@/lib/supabase/session'
 import { applyWeek1Progression } from '@/lib/plan-engine/apply-progression'
+import { generateNextMonth } from '@/lib/plan-engine/generate-month'
+import type { OnboardingProfile } from '@/lib/openai/client'
+
+async function isWeekComplete(
+  supabase: SupabaseClient,
+  trainingPlanId: string,
+  weekNumber: number
+): Promise<boolean> {
+  const { data: weekDays } = await supabase
+    .from('workout_day')
+    .select('id, workout_session(completed)')
+    .eq('training_plan_id', trainingPlanId)
+    .eq('week_number', weekNumber)
+
+  return (weekDays ?? []).every((weekDay) =>
+    (weekDay.workout_session as unknown as { completed: boolean }[]).some((s) => s.completed)
+  )
+}
 
 export async function POST(
   request: Request,
@@ -39,18 +58,43 @@ export async function POST(
     .eq('completed', false)
 
   if (day.week_number === 1) {
-    const { data: week1Days } = await supabase
-      .from('workout_day')
-      .select('id, workout_session(completed)')
-      .eq('training_plan_id', day.training_plan_id)
-      .eq('week_number', 1)
-
-    const allComplete = (week1Days ?? []).every((weekDay) =>
-      (weekDay.workout_session as unknown as { completed: boolean }[]).some((s) => s.completed)
-    )
-
-    if (allComplete) {
+    if (await isWeekComplete(supabase, day.training_plan_id, 1)) {
       await applyWeek1Progression(supabase, day.training_plan_id)
+    }
+  }
+
+  if (day.week_number === 4) {
+    if (await isWeekComplete(supabase, day.training_plan_id, 4)) {
+      const { data: plan } = await supabase
+        .from('training_plan')
+        .select('month_number')
+        .eq('id', day.training_plan_id)
+        .single()
+
+      const { data: profileRow } = await supabase
+        .from('profile')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (plan && profileRow) {
+        const profile: OnboardingProfile = {
+          goal: profileRow.goal,
+          level: profileRow.level,
+          days_per_week: profileRow.days_per_week,
+          equipment: profileRow.equipment,
+          restrictions: profileRow.restrictions,
+          session_minutes: profileRow.session_minutes,
+          age: profileRow.age,
+          sex: profileRow.sex,
+          training_history: profileRow.training_history,
+          excluded_targets: profileRow.excluded_targets ?? [],
+        }
+
+        await generateNextMonth(supabase, userId, profile, plan.month_number)
+      }
     }
   }
 

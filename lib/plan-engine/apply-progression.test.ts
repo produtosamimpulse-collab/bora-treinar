@@ -26,7 +26,12 @@ type Row = Record<string, unknown>
  * days below share the label but have a different `day_of_week`, so this
  * test would fail if the implementation matched on day_label instead.
  */
-function makeSupabaseMock() {
+function makeSupabaseMock(
+  loggedSets: { load_kg: number; reps_done: number; rir_logged: number | null }[] = [
+    { load_kg: 40, reps_done: 10, rir_logged: 2 },
+    { load_kg: 45, reps_done: 10, rir_logged: 2 },
+  ]
+) {
   const tables: Record<string, Row[]> = {
     workout_day: [
       { id: 'day-w1', training_plan_id: 'plan-1', week_number: 1, day_label: 'Peito, Ombros e Tríceps', day_of_week: 1 },
@@ -42,7 +47,7 @@ function makeSupabaseMock() {
       { id: 'day-w4', training_plan_id: 'plan-1', week_number: 4, day_label: 'Peito, Ombros e Tríceps', day_of_week: 1 },
     ],
     workout_day_exercise: [
-      { id: 'wde-w1', workout_day_id: 'day-w1', exercise_id: 'ex-1', order_index: 0 },
+      { id: 'wde-w1', workout_day_id: 'day-w1', exercise_id: 'ex-1', order_index: 0, target_reps: 8, target_rir: '2-3' },
 
       { id: 'wde-w2-decoy-day', workout_day_id: 'day-w2-decoy', exercise_id: 'ex-other', order_index: 0 },
       // wrong order_index on the CORRECT day, listed first
@@ -70,9 +75,8 @@ function makeSupabaseMock() {
     workout_session_set: [
       // set for a different exercise in the same session, to make sure
       // exercise_id is actually filtered on
-      { workout_session_id: 'session-1', exercise_id: 'ex-other', load_kg: 999 },
-      { workout_session_id: 'session-1', exercise_id: 'ex-1', load_kg: 40 },
-      { workout_session_id: 'session-1', exercise_id: 'ex-1', load_kg: 45 },
+      { workout_session_id: 'session-1', exercise_id: 'ex-other', load_kg: 999, reps_done: 10, rir_logged: 2 },
+      ...loggedSets.map((set) => ({ workout_session_id: 'session-1', exercise_id: 'ex-1', ...set })),
     ],
   }
 
@@ -136,5 +140,39 @@ describe('applyWeek1Progression', () => {
     // decoys (wrong day_label, wrong order_index) must never be updated
     expect(updates.some((u) => u.id.includes('decoy'))).toBe(false)
     expect(updates.some((u) => u.id.includes('wrong-order'))).toBe(false)
+  })
+
+  it('keeps the same load instead of progressing when logged reps fell short of the target', async () => {
+    const { supabase, updates } = makeSupabaseMock([
+      // target_reps is 8; only hitting 5 reps means performance did not
+      // justify increasing the load next week
+      { load_kg: 40, reps_done: 5, rir_logged: 2 },
+      { load_kg: 45, reps_done: 5, rir_logged: 2 },
+    ])
+
+    await applyWeek1Progression(supabase, 'plan-1')
+
+    const week2 = updates.find((u) => u.id === 'wde-w2')
+    const week3 = updates.find((u) => u.id === 'wde-w3')
+    const week4 = updates.find((u) => u.id === 'wde-w4')
+
+    expect((week2?.values as { target_load_kg: number }).target_load_kg).toBe(45)
+    expect((week3?.values as { target_load_kg: number }).target_load_kg).toBe(45)
+    expect((week4?.values as { target_load_kg: number }).target_load_kg).toBe(45)
+  })
+
+  it('keeps the same load instead of progressing when logged RIR was above the prescribed max', async () => {
+    const { supabase, updates } = makeSupabaseMock([
+      // target_rir max is 3; RIR 5 means they stopped further from failure
+      // than prescribed, so performance did not justify increasing the load
+      { load_kg: 40, reps_done: 10, rir_logged: 5 },
+      { load_kg: 45, reps_done: 10, rir_logged: 5 },
+    ])
+
+    await applyWeek1Progression(supabase, 'plan-1')
+
+    const week2 = updates.find((u) => u.id === 'wde-w2')
+
+    expect((week2?.values as { target_load_kg: number }).target_load_kg).toBe(45)
   })
 })

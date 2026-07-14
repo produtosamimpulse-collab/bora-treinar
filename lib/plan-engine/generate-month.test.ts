@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { generateFirstMonth } from './generate-month'
+import { generateFirstMonth, generateNextMonth } from './generate-month'
 import type { OnboardingProfile } from '../openai/client'
 
 const mockSelectExercisesForWeek = vi.hoisted(() => vi.fn())
@@ -141,6 +141,13 @@ describe('generateFirstMonth', () => {
     expect(
       cardioByPosition[2].every((day) => day.cardio_exercise_id === 'cardio-1')
     ).toBe(true)
+
+    // week 1 is calibração, weeks 2-4 are progressão
+    const weekTypes = (supabase.insertedRows.workout_day as { week_type: string; week_number: number }[]).map(
+      (row) => ({ week_number: row.week_number, week_type: row.week_type })
+    )
+    expect(weekTypes.filter((w) => w.week_number === 1).every((w) => w.week_type === 'calibracao')).toBe(true)
+    expect(weekTypes.filter((w) => w.week_number !== 1).every((w) => w.week_type === 'progressao')).toBe(true)
   })
 
   it('throws when the training_plan insert fails', async () => {
@@ -162,5 +169,37 @@ describe('generateFirstMonth', () => {
     await expect(generateFirstMonth(failingSupabase, 'user-1', BASE_PROFILE)).rejects.toThrow(
       'insert failed'
     )
+  })
+})
+
+describe('generateNextMonth', () => {
+  it('increments month_number, marks week 1 as deload with half the sets, and keeps weeks 2-4 at full volume', async () => {
+    const supabase = makeSupabaseMock()
+
+    mockSelectExercisesForWeek.mockReset()
+    mockSelectExercisesForWeek.mockResolvedValue([
+      [{ id: 'ex-1', name: 'Exercise 1', target: 'pectorals', secondaryMuscles: [], mechanic: 'composto' }],
+      [{ id: 'ex-2', name: 'Exercise 2', target: 'quads', secondaryMuscles: [], mechanic: 'composto' }],
+      [{ id: 'ex-3', name: 'Exercise 3', target: 'lats', secondaryMuscles: [], mechanic: 'composto' }],
+    ])
+    mockSelectCardioExercise.mockReset()
+    mockSelectCardioExercise.mockResolvedValue(null)
+
+    await generateNextMonth(supabase, 'user-1', BASE_PROFILE, 1)
+
+    const plan = (supabase.insertedRows.training_plan as { month_number: number }[])[0]
+    expect(plan.month_number).toBe(2)
+
+    const days = supabase.insertedRows.workout_day as { week_number: number; week_type: string }[]
+    expect(days.filter((d) => d.week_number === 1).every((d) => d.week_type === 'deload')).toBe(true)
+    expect(days.filter((d) => d.week_number !== 1).every((d) => d.week_type === 'progressao')).toBe(true)
+
+    // hipertrofia -> volume.sets is 4 -> deload week gets ceil(4/2) = 2 sets, other weeks keep 4
+    const dayExercises = supabase.insertedRows.workout_day_exercise as {
+      target_sets: number
+    }[]
+    // first 3 rows belong to week 1 (deload), the rest to weeks 2-4
+    expect(dayExercises.slice(0, 3).every((row) => row.target_sets === 2)).toBe(true)
+    expect(dayExercises.slice(3).every((row) => row.target_sets === 4)).toBe(true)
   })
 })
