@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { isPublicPath } from './lib/supabase/middleware'
+import { SESSION_MAX_AGE_SECONDS } from './lib/supabase/session-config'
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -13,6 +14,7 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: { maxAge: SESSION_MAX_AGE_SECONDS },
       cookies: {
         getAll: () => request.cookies.getAll(),
         setAll: (cookiesToSet) => {

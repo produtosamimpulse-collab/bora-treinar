@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase/client'
 
-type Mode = 'signin' | 'signup' | 'reset'
+type Mode = 'signin' | 'reset'
 
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>('signin')
@@ -35,25 +35,6 @@ export default function LoginPage() {
       return
     }
 
-    if (mode === 'signup') {
-      const { data, error } = await supabase.auth.signUp({ email, password })
-
-      if (error) {
-        setError(error.message)
-        return
-      }
-
-      if (data.session) {
-        router.push('/')
-        router.refresh()
-        return
-      }
-
-      setInfo('Conta criada! Verifique seu email para confirmar antes de entrar.')
-      setMode('signin')
-      return
-    }
-
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
@@ -63,12 +44,6 @@ export default function LoginPage() {
 
     router.push('/')
     router.refresh()
-  }
-
-  function toggleMode() {
-    setError(null)
-    setInfo(null)
-    setMode((current) => (current === 'signin' ? 'signup' : 'signin'))
   }
 
   function goToReset() {
@@ -90,7 +65,7 @@ export default function LoginPage() {
       >
         <span className="mb-2 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-foreground/60">
           <span className="h-1.5 w-1.5 rounded-full bg-brand" />
-          {mode === 'signin' ? 'Entrar' : mode === 'signup' ? 'Criar conta' : 'Redefinir senha'}
+          {mode === 'signin' ? 'Entrar' : 'Redefinir senha'}
         </span>
         <h1 className="font-display text-3xl uppercase leading-none tracking-tight">
           Bora <span className="text-brand text-outline">Treinar!</span>
@@ -135,10 +110,10 @@ export default function LoginPage() {
           type="submit"
           className="mt-6 w-full rounded-full bg-brand py-3 text-sm font-semibold uppercase tracking-wide text-black transition-transform hover:scale-[1.02]"
         >
-          {mode === 'signin' ? 'Entrar' : mode === 'signup' ? 'Criar conta' : 'Enviar link de redefinição'}
+          {mode === 'signin' ? 'Entrar' : 'Enviar link de redefinição'}
         </button>
 
-        {mode === 'reset' ? (
+        {mode === 'reset' && (
           <button
             type="button"
             onClick={() => {
@@ -149,14 +124,6 @@ export default function LoginPage() {
             className="mt-4 w-full text-center text-sm text-foreground/60 underline underline-offset-4 hover:text-foreground"
           >
             Voltar pro login
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={toggleMode}
-            className="mt-4 w-full text-center text-sm text-foreground/60 underline underline-offset-4 hover:text-foreground"
-          >
-            {mode === 'signin' ? 'Não tem conta? Criar uma' : 'Já tem conta? Entrar'}
           </button>
         )}
       </form>
