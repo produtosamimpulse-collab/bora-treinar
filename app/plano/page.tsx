@@ -103,6 +103,30 @@ export default async function PlanoPage({
   const currentWeekDays = allDays.filter((day) => day.week_number === currentWeek)
   const currentWeekType = currentWeekDays[0]?.week_type ?? null
 
+  // Se a semana 4 terminou, o próximo mês só é gerado depois da avaliação
+  // mensal (lib/plan-engine/checkin.ts) - se ele ainda não existe, mostra
+  // um aviso pra lembrar o aluno de fazer o check-in.
+  let needsCheckin = false
+
+  if (weekCompletion[4]) {
+    const { data: planRow } = await supabase
+      .from('training_plan')
+      .select('month_number')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (planRow) {
+      const { data: nextPlan } = await supabase
+        .from('training_plan')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('month_number', planRow.month_number + 1)
+        .maybeSingle()
+
+      needsCheckin = !nextPlan
+    }
+  }
+
   const formattedDays = currentWeekDays.map((day) => ({
     id: day.id,
     dayLabel: translateDayLabel(day.day_label),
@@ -147,6 +171,23 @@ export default async function PlanoPage({
           Progresso
         </a>
       </header>
+
+      {needsCheckin && (
+        <div className="mb-8 rounded-2xl border border-brand/40 bg-surface p-6 text-center">
+          <p className="text-xs font-medium uppercase tracking-widest text-brand text-outline">
+            Mês concluído
+          </p>
+          <p className="mt-2 text-sm text-foreground/70">
+            Antes de começar o próximo mês, vamos fazer sua avaliação mensal com o personal.
+          </p>
+          <a
+            href={`/checkin?planId=${id}`}
+            className="mt-4 inline-block min-h-11 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black"
+          >
+            Fazer avaliação mensal
+          </a>
+        </div>
+      )}
 
       <PlanoInterativo days={formattedDays} initialCompletedDayIds={completedDayIds} />
     </main>

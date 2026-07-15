@@ -3,8 +3,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getAuthenticatedUserId } from '@/lib/supabase/session'
 import { applyWeek1Progression } from '@/lib/plan-engine/apply-progression'
-import { generateNextMonth } from '@/lib/plan-engine/generate-month'
-import type { OnboardingProfile } from '@/lib/openai/client'
 
 async function isWeekComplete(
   supabase: SupabaseClient,
@@ -66,41 +64,12 @@ export async function POST(
   let monthCompleted = false
 
   if (day.week_number === 4) {
-    if (await isWeekComplete(supabase, day.training_plan_id, 4)) {
-      monthCompleted = true
-
-      const { data: plan } = await supabase
-        .from('training_plan')
-        .select('month_number')
-        .eq('id', day.training_plan_id)
-        .single()
-
-      const { data: profileRow } = await supabase
-        .from('profile')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (plan && profileRow) {
-        const profile: OnboardingProfile = {
-          goal: profileRow.goal,
-          level: profileRow.level,
-          days_per_week: profileRow.days_per_week,
-          equipment: profileRow.equipment,
-          restrictions: profileRow.restrictions,
-          session_minutes: profileRow.session_minutes,
-          age: profileRow.age,
-          sex: profileRow.sex,
-          training_history: profileRow.training_history,
-          excluded_targets: profileRow.excluded_targets ?? [],
-        }
-
-        await generateNextMonth(supabase, userId, profile, plan.month_number)
-      }
-    }
+    monthCompleted = await isWeekComplete(supabase, day.training_plan_id, 4)
   }
 
-  return NextResponse.json({ ok: true, monthCompleted })
+  return NextResponse.json({
+    ok: true,
+    monthCompleted,
+    trainingPlanId: monthCompleted ? day.training_plan_id : null,
+  })
 }

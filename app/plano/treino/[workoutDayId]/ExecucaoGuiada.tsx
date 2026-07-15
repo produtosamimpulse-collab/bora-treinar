@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Confetti from '@/app/components/Confetti'
 
 type Exercise = {
   id: string
@@ -16,28 +17,6 @@ type Exercise = {
 type Draft = { reps: string; load: string; rir: string }
 
 type RestState = { exerciseId: string; secondsLeft: number }
-
-const CONFETTI_PIECES = ['🎉', '🎊', '✨', '🎆', '🎇']
-
-function Confetti() {
-  return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      {Array.from({ length: 24 }).map((_, index) => (
-        <span
-          key={index}
-          className="confetti-piece text-2xl"
-          style={{
-            left: `${Math.random() * 100}%`,
-            animationDelay: `${Math.random() * 1.2}s`,
-            animationDuration: `${2 + Math.random() * 1.5}s`,
-          }}
-        >
-          {CONFETTI_PIECES[index % CONFETTI_PIECES.length]}
-        </span>
-      ))}
-    </div>
-  )
-}
 
 export default function ExecucaoGuiada({
   workoutDayId,
@@ -78,6 +57,7 @@ export default function ExecucaoGuiada({
   const [resting, setResting] = useState<RestState | null>(null)
   const [dayCompleted, setDayCompleted] = useState(false)
   const [monthCompleted, setMonthCompleted] = useState(false)
+  const [completedTrainingPlanId, setCompletedTrainingPlanId] = useState<string | null>(null)
   const [finishing, setFinishing] = useState(false)
   const [finishError, setFinishError] = useState<string | null>(null)
   const [loadingOptionsFor, setLoadingOptionsFor] = useState<string | null>(null)
@@ -183,9 +163,13 @@ export default function ExecucaoGuiada({
         return
       }
 
-      const body = (await response.json()) as { monthCompleted: boolean }
+      const body = (await response.json()) as {
+        monthCompleted: boolean
+        trainingPlanId: string | null
+      }
 
       if (body.monthCompleted) {
+        setCompletedTrainingPlanId(body.trainingPlanId)
         setMonthCompleted(true)
       } else {
         setDayCompleted(true)
@@ -314,15 +298,15 @@ export default function ExecucaoGuiada({
         </p>
         <h1 className="font-display text-4xl uppercase leading-none sm:text-5xl">Parabéns!</h1>
         <p className="max-w-sm text-sm text-foreground/70">
-          Você terminou as 4 semanas do mês. Já preparei o mês seguinte, começando com uma semana
-          de recuperação.
+          Você terminou as 4 semanas do mês. Antes de montar o mês seguinte, vamos fazer sua
+          avaliação com o personal.
         </p>
         <button
           type="button"
-          onClick={() => router.push('/plano')}
+          onClick={() => router.push(`/checkin?planId=${completedTrainingPlanId}`)}
           className="mt-4 min-h-11 w-full max-w-xs rounded-full bg-brand py-4 text-sm font-semibold uppercase tracking-wide text-black"
         >
-          Ver novo plano
+          Fazer avaliação mensal
         </button>
       </main>
     )
