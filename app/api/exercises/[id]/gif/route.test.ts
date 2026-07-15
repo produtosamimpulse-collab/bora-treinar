@@ -34,26 +34,30 @@ describe('GET /api/exercises/:id/gif', () => {
     global.fetch = originalFetch
   })
 
-  it('redirects straight to media_url when already cached, without calling ExerciseDB', async () => {
+  it('streams the cached gif with a long-lived Cache-Control header, without calling ExerciseDB', async () => {
     mockSingle.mockResolvedValue({
       data: { id: 'ex-1', external_id: '0001', media_url: 'https://storage.example/cached.gif' },
       error: null,
     })
 
-    const fetchSpy = vi.fn()
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(8),
+    })
     global.fetch = fetchSpy as unknown as typeof fetch
 
     const response = await GET(new Request('http://localhost/api/exercises/ex-1/gif'), {
       params: Promise.resolve({ id: 'ex-1' }),
     })
 
-    expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('https://storage.example/cached.gif')
-    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(fetchSpy).toHaveBeenCalledWith('https://storage.example/cached.gif')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('image/gif')
+    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
     expect(mockUpload).not.toHaveBeenCalled()
   })
 
-  it('fetches from ExerciseDB, caches, and redirects when not yet cached', async () => {
+  it('fetches from ExerciseDB, caches, and streams the gif when not yet cached', async () => {
     mockSingle.mockResolvedValue({
       data: { id: 'ex-1', external_id: '0001', media_url: null },
       error: null,
@@ -74,7 +78,8 @@ describe('GET /api/exercises/:id/gif', () => {
     )
     expect(mockUpload).toHaveBeenCalled()
     expect(mockUpdate).toHaveBeenCalledWith({ media_url: 'https://storage.example/exercise-gifs/0001.gif' })
-    expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('https://storage.example/exercise-gifs/0001.gif')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('image/gif')
+    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
   })
 })
