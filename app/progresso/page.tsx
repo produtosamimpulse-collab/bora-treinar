@@ -2,11 +2,57 @@ import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getAuthenticatedUserId } from '@/lib/supabase/session'
 
+type MonthPoint = { month: number; load: number }
+
 type ExerciseProgress = {
   name: string
-  firstLoad: number
-  lastLoad: number
-  changed: boolean
+  points: MonthPoint[]
+}
+
+function ProgressChart({ points }: { points: MonthPoint[] }) {
+  const width = 300
+  const height = 90
+  const padding = 20
+
+  const months = points.map((p) => p.month)
+  const loads = points.map((p) => p.load)
+  const minLoad = Math.min(...loads)
+  const maxLoad = Math.max(...loads)
+  const loadRange = maxLoad - minLoad || 1
+  const minMonth = Math.min(...months)
+  const maxMonth = Math.max(...months)
+  const monthRange = maxMonth - minMonth || 1
+
+  const coords = points.map((p) => ({
+    x: padding + ((p.month - minMonth) / monthRange) * (width - padding * 2),
+    y: height - padding - ((p.load - minLoad) / loadRange) * (height - padding * 2),
+    month: p.month,
+    load: p.load,
+  }))
+
+  const pathD = coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ')
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full"
+      role="img"
+      aria-label="Gráfico de evolução de carga por mês"
+    >
+      <path d={pathD} fill="none" stroke="#c8ff00" strokeWidth="2" />
+      {coords.map((c, i) => (
+        <g key={i}>
+          <circle cx={c.x} cy={c.y} r="3.5" fill="#0a0a0a" />
+          <text x={c.x} y={c.y - 8} fontSize="9" textAnchor="middle" fill="#0a0a0a">
+            {c.load}kg
+          </text>
+          <text x={c.x} y={height - 4} fontSize="9" textAnchor="middle" fill="#666">
+            Mês {c.month}
+          </text>
+        </g>
+      ))}
+    </svg>
+  )
 }
 
 export default async function ProgressoPage() {
@@ -25,6 +71,7 @@ export default async function ProgressoPage() {
     .order('month_number', { ascending: true })
 
   const planIds = (plans ?? []).map((plan) => plan.id)
+  const monthByPlanId = new Map((plans ?? []).map((plan) => [plan.id, plan.month_number]))
 
   const { data: days } = await supabase
     .from('workout_day')
@@ -43,15 +90,17 @@ export default async function ProgressoPage() {
     return { ...plan, totalDays: planDays.length, completedDays }
   })
 
-  const sessionDateById = new Map<string, string>()
+  const monthBySessionId = new Map<string, number>()
   for (const day of allDays) {
+    const month = monthByPlanId.get(day.training_plan_id)
+    if (month == null) continue
     for (const session of day.workout_session) {
       if (session.completed) {
-        sessionDateById.set(session.id, session.performed_at)
+        monthBySessionId.set(session.id, month)
       }
     }
   }
-  const sessionIds = [...sessionDateById.keys()]
+  const sessionIds = [...monthBySessionId.keys()]
 
   const { data: sets } = await supabase
     .from('workout_session_set')
@@ -59,36 +108,43 @@ export default async function ProgressoPage() {
     .in('workout_session_id', sessionIds.length > 0 ? sessionIds : [''])
     .not('load_kg', 'is', null)
 
-  const entriesByExercise = new Map<string, { date: string; load: number }[]>()
+  const loadByExerciseAndMonth = new Map<string, Map<number, number>>()
   for (const set of (sets ?? []) as unknown as {
     load_kg: number
     workout_session_id: string
     exercise: { name: string; name_pt: string | null }
   }[]) {
-    const date = sessionDateById.get(set.workout_session_id)
-    if (!date) continue
+    const month = monthBySessionId.get(set.workout_session_id)
+    if (month == null) continue
 
     const name = set.exercise.name_pt ?? set.exercise.name
-    const list = entriesByExercise.get(name) ?? []
-    list.push({ date, load: set.load_kg })
-    entriesByExercise.set(name, list)
+    const byMonth = loadByExerciseAndMonth.get(name) ?? new Map<number, number>()
+    byMonth.set(month, Math.max(byMonth.get(month) ?? 0, set.load_kg))
+    loadByExerciseAndMonth.set(name, byMonth)
   }
 
-  const exerciseProgress: ExerciseProgress[] = [...entriesByExercise.entries()]
-    .map(([name, entries]) => {
-      const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date))
-      const firstDate = sorted[0].date
-      const lastDate = sorted[sorted.length - 1].date
-      const firstLoad = Math.max(...sorted.filter((e) => e.date === firstDate).map((e) => e.load))
-      const lastLoad = Math.max(...sorted.filter((e) => e.date === lastDate).map((e) => e.load))
-      return { name, firstLoad, lastLoad, changed: firstDate !== lastDate }
-    })
+  const exerciseProgress: ExerciseProgress[] = [...loadByExerciseAndMonth.entries()]
+    .map(([name, byMonth]) => ({
+      name,
+      points: [...byMonth.entries()]
+        .map(([month, load]) => ({ month, load }))
+        .sort((a, b) => a.month - b.month),
+    }))
     .sort((a, b) => a.name.localeCompare(b.name))
+
+  const chartable = exerciseProgress.filter((exercise) => exercise.points.length >= 2)
+  const singlePoint = exerciseProgress.filter((exercise) => exercise.points.length === 1)
 
   return (
     <main className="min-h-dvh bg-background px-6 py-10 text-foreground sm:px-10">
       <header className="mb-10">
-        <span className="mb-3 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-foreground/60">
+        <a
+          href="/plano"
+          className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
+        >
+          ← Voltar pro plano
+        </a>
+        <span className="mb-3 mt-4 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-foreground/60">
           <span className="h-1.5 w-1.5 rounded-full bg-brand" />
           Histórico
         </span>
@@ -125,30 +181,38 @@ export default async function ProgressoPage() {
       </section>
 
       <section>
-        <h2 className="mb-4 font-display text-xl uppercase tracking-tight">Evolução de carga</h2>
+        <h2 className="mb-4 font-display text-xl uppercase tracking-tight">Evolução de carga por mês</h2>
 
-        {exerciseProgress.length === 0 ? (
+        {chartable.length === 0 && singlePoint.length === 0 ? (
           <p className="text-sm text-foreground/60">Nenhum treino registrado ainda.</p>
         ) : (
-          <ul className="space-y-3">
-            {exerciseProgress.map((exercise) => (
-              <li
+          <div className="space-y-4">
+            {chartable.map((exercise) => (
+              <div
                 key={exercise.name}
-                className="flex items-center justify-between rounded-2xl border border-border-subtle bg-surface p-4 sm:p-6"
+                className="rounded-2xl border border-border-subtle bg-surface p-4 sm:p-6"
               >
-                <p className="text-sm font-medium capitalize">{exercise.name}</p>
-                <p className="text-sm text-foreground/70">
-                  {exercise.changed ? (
-                    <>
-                      {exercise.firstLoad}kg <span className="text-brand text-outline">→</span> {exercise.lastLoad}kg
-                    </>
-                  ) : (
-                    <>{exercise.lastLoad}kg</>
-                  )}
-                </p>
-              </li>
+                <p className="mb-2 text-sm font-medium capitalize">{exercise.name}</p>
+                <ProgressChart points={exercise.points} />
+              </div>
             ))}
-          </ul>
+
+            {singlePoint.length > 0 && (
+              <div className="rounded-2xl border border-border-subtle bg-surface p-4 sm:p-6">
+                <p className="mb-3 text-xs font-medium uppercase tracking-widest text-foreground/60">
+                  Ainda sem mês suficiente pra gráfico
+                </p>
+                <ul className="space-y-2">
+                  {singlePoint.map((exercise) => (
+                    <li key={exercise.name} className="flex items-center justify-between text-sm">
+                      <span className="capitalize">{exercise.name}</span>
+                      <span className="text-foreground/70">{exercise.points[0].load}kg</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         )}
       </section>
     </main>

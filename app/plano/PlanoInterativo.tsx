@@ -35,6 +35,8 @@ type DayItem = {
   cardio: CardioItem | null
 }
 
+type CoachMessage = { role: 'user' | 'assistant'; content: string }
+
 export default function PlanoInterativo({
   days,
   initialCompletedDayIds = [],
@@ -66,6 +68,10 @@ export default function PlanoInterativo({
   const [swapOptionsFor, setSwapOptionsFor] = useState<string | null>(null)
   const [swapOptions, setSwapOptions] = useState<{ id: string; name: string }[]>([])
   const [applyingOptionId, setApplyingOptionId] = useState<string | null>(null)
+  const [chatOpenForDay, setChatOpenForDay] = useState<string | null>(null)
+  const [chatMessagesByDay, setChatMessagesByDay] = useState<Record<string, CoachMessage[]>>({})
+  const [chatInputByDay, setChatInputByDay] = useState<Record<string, string>>({})
+  const [chatLoadingByDay, setChatLoadingByDay] = useState<Record<string, boolean>>({})
   const completedDayIds = new Set(initialCompletedDayIds)
 
   async function openSwapOptions(workoutDayExerciseId: string) {
@@ -117,6 +123,53 @@ export default function PlanoInterativo({
       setSwapOptionsFor(null)
     } finally {
       setApplyingOptionId(null)
+    }
+  }
+
+  async function sendCoachMessage(dayId: string) {
+    const input = (chatInputByDay[dayId] ?? '').trim()
+
+    if (!input) {
+      return
+    }
+
+    const currentMessages = chatMessagesByDay[dayId] ?? []
+    const nextMessages: CoachMessage[] = [...currentMessages, { role: 'user', content: input }]
+
+    setChatMessagesByDay((current) => ({ ...current, [dayId]: nextMessages }))
+    setChatInputByDay((current) => ({ ...current, [dayId]: '' }))
+    setChatLoadingByDay((current) => ({ ...current, [dayId]: true }))
+
+    try {
+      const response = await fetch('/api/coach-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: nextMessages, workoutDayId: dayId }),
+      })
+
+      if (!response.ok) {
+        return
+      }
+
+      const result = await response.json()
+
+      setChatMessagesByDay((current) => ({
+        ...current,
+        [dayId]: [...nextMessages, { role: 'assistant', content: result.content }],
+      }))
+
+      if (result.swapped) {
+        setExerciseNames((current) => ({
+          ...current,
+          [result.swapped.workoutDayExerciseId]: result.swapped.name,
+        }))
+        setExerciseIds((current) => ({
+          ...current,
+          [result.swapped.workoutDayExerciseId]: result.swapped.id,
+        }))
+      }
+    } finally {
+      setChatLoadingByDay((current) => ({ ...current, [dayId]: false }))
     }
   }
 
@@ -213,6 +266,63 @@ export default function PlanoInterativo({
                       {day.cardio.minutes}min de {day.cardio.name}
                       {day.cardio.intensity ? `, intensidade ${day.cardio.intensity}` : ''}
                     </p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setChatOpenForDay(chatOpenForDay === day.id ? null : day.id)}
+                  className="mt-6 min-h-11 w-full rounded-xl border border-border-subtle px-4 text-left text-sm font-medium text-foreground/80"
+                >
+                  {chatOpenForDay === day.id ? 'Fechar conversa' : 'Falar com o treinador sobre esse treino'}
+                </button>
+
+                {chatOpenForDay === day.id && (
+                  <div className="mt-3 rounded-xl border border-border-subtle bg-background p-3">
+                    <div className="max-h-64 space-y-2 overflow-y-auto">
+                      {(chatMessagesByDay[day.id] ?? []).length === 0 && (
+                        <p className="text-xs text-foreground/60">
+                          Pergunte sobre algum exercício, relate uma dor, ou peça pra trocar algo se o
+                          equipamento estiver ocupado.
+                        </p>
+                      )}
+                      {(chatMessagesByDay[day.id] ?? []).map((message, index) => (
+                        <div
+                          key={index}
+                          className={
+                            message.role === 'user'
+                              ? 'ml-auto max-w-[85%] rounded-xl bg-brand px-3 py-2 text-xs text-black'
+                              : 'mr-auto max-w-[85%] rounded-xl border border-border-subtle bg-surface px-3 py-2 text-xs'
+                          }
+                        >
+                          {message.content}
+                        </div>
+                      ))}
+                      {chatLoadingByDay[day.id] && (
+                        <p className="text-xs text-foreground/50">Digitando...</p>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex gap-2">
+                      <input
+                        value={chatInputByDay[day.id] ?? ''}
+                        onChange={(e) =>
+                          setChatInputByDay((current) => ({ ...current, [day.id]: e.target.value }))
+                        }
+                        onKeyDown={(e) => e.key === 'Enter' && sendCoachMessage(day.id)}
+                        placeholder="Digite sua pergunta"
+                        disabled={chatLoadingByDay[day.id]}
+                        className="min-h-11 flex-1 rounded-lg border border-border-subtle bg-surface px-3 text-sm focus:border-brand focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => sendCoachMessage(day.id)}
+                        disabled={chatLoadingByDay[day.id]}
+                        className="min-h-11 rounded-lg bg-brand px-4 text-xs font-semibold uppercase text-black disabled:opacity-50"
+                      >
+                        Enviar
+                      </button>
+                    </div>
                   </div>
                 )}
 

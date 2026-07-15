@@ -2,17 +2,18 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getAuthenticatedUserId } from '@/lib/supabase/session'
 import { translateDayLabel } from '@/lib/plan-engine/label-i18n'
-import { determineCurrentWeek } from '@/lib/plan-engine/week-progress'
-import { chatWithCoach, type PlanContext } from '@/lib/openai/coach-chat'
+import { getSwapOptions, applySwap } from '@/lib/plan-engine/exercise-swap'
+import { chatWithCoach, type DayContext } from '@/lib/openai/coach-chat'
 import type { ChatMessage } from '@/lib/openai/client'
 
-async function buildPlanContext(
+async function buildDayContext(
   supabase: ReturnType<typeof createServerSupabaseClient>,
-  userId: string
-): Promise<PlanContext | null> {
+  userId: string,
+  workoutDayId: string
+): Promise<DayContext | null> {
   const { data: profile } = await supabase
     .from('profile')
-    .select('goal, level, days_per_week')
+    .select('goal, level')
     .eq('user_id', userId)
     .maybeSingle()
 
@@ -20,80 +21,45 @@ async function buildPlanContext(
     return null
   }
 
-  const { data: plan } = await supabase
-    .from('training_plan')
-    .select('id')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (!plan) {
-    return {
-      goal: profile.goal,
-      level: profile.level,
-      daysPerWeek: profile.days_per_week,
-      currentWeek: 1,
-      weekType: null,
-      days: [],
-    }
-  }
-
-  const { data } = await supabase
+  const { data: day } = await supabase
     .from('workout_day')
     .select(
-      'id, day_label, week_number, week_type, cardio_minutes, cardio_intensity, cardio_exercise:cardio_exercise_id(name, name_pt), workout_day_exercise(target_sets, target_reps, target_rir, exercise(name, name_pt)), workout_session(completed)'
+      'id, day_label, training_plan:training_plan_id(user_id), workout_day_exercise(id, target_sets, target_reps, target_rir, exercise(name, name_pt))'
     )
-    .eq('training_plan_id', plan.id)
+    .eq('id', workoutDayId)
+    .maybeSingle()
 
-  const allDays = (data ?? []) as unknown as Array<{
-    day_label: string
-    week_number: number
-    week_type: string | null
-    cardio_minutes: number | null
-    cardio_intensity: string | null
-    cardio_exercise: { name: string; name_pt: string | null } | null
-    workout_day_exercise: Array<{
+  if (!day) {
+    return null
+  }
+
+  const ownerUserId = (day.training_plan as unknown as { user_id: string }).user_id
+
+  if (ownerUserId !== userId) {
+    return null
+  }
+
+  const exercises = (
+    day.workout_day_exercise as unknown as Array<{
+      id: string
       target_sets: number
       target_reps: number
       target_rir: string | null
       exercise: { name: string; name_pt: string | null }
     }>
-    workout_session: Array<{ completed: boolean }>
-  }>
-
-  const weekCompletion: Record<number, boolean> = {}
-  for (let week = 1; week <= 4; week++) {
-    const weekDays = allDays.filter((day) => day.week_number === week)
-    weekCompletion[week] =
-      weekDays.length > 0 && weekDays.every((day) => day.workout_session.some((s) => s.completed))
-  }
-
-  const currentWeek = determineCurrentWeek(weekCompletion)
-  const currentWeekDays = allDays.filter((day) => day.week_number === currentWeek)
+  ).map((item) => ({
+    workoutDayExerciseId: item.id,
+    name: item.exercise.name_pt ?? item.exercise.name,
+    targetSets: item.target_sets,
+    targetReps: item.target_reps,
+    targetRir: item.target_rir,
+  }))
 
   return {
     goal: profile.goal,
     level: profile.level,
-    daysPerWeek: profile.days_per_week,
-    currentWeek,
-    weekType: currentWeekDays[0]?.week_type ?? null,
-    days: currentWeekDays.map((day) => ({
-      dayLabel: translateDayLabel(day.day_label),
-      exercises: day.workout_day_exercise.map((item) => ({
-        name: item.exercise.name_pt ?? item.exercise.name,
-        targetSets: item.target_sets,
-        targetReps: item.target_reps,
-        targetRir: item.target_rir,
-      })),
-      cardio: day.cardio_exercise
-        ? {
-            name: day.cardio_exercise.name_pt ?? day.cardio_exercise.name,
-            minutes: day.cardio_minutes,
-            intensity: day.cardio_intensity,
-          }
-        : null,
-    })),
+    dayLabel: translateDayLabel(day.day_label as string),
+    exercises,
   }
 }
 
@@ -104,11 +70,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { messages } = (await request.json()) as { messages: ChatMessage[] }
+  const { messages, workoutDayId } = (await request.json()) as {
+    messages: ChatMessage[]
+    workoutDayId: string
+  }
 
   const supabase = createServerSupabaseClient()
-  const context = await buildPlanContext(supabase, userId)
-  const content = await chatWithCoach(messages, context)
+  const context = await buildDayContext(supabase, userId, workoutDayId)
 
-  return NextResponse.json({ content })
+  const result = await chatWithCoach(messages, context, {
+    listAlternatives: (workoutDayExerciseId) => getSwapOptions(supabase, workoutDayExerciseId, userId),
+    applySwap: (workoutDayExerciseId, exerciseId) =>
+      applySwap(supabase, workoutDayExerciseId, exerciseId, userId),
+  })
+
+  return NextResponse.json(result)
 }

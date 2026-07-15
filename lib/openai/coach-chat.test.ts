@@ -8,71 +8,171 @@ vi.mock('openai', () => ({
   }),
 }))
 
-import { chatWithCoach } from './coach-chat'
+import { chatWithCoach, type CoachTools } from './coach-chat'
+
+function makeTools(overrides?: Partial<CoachTools>): CoachTools {
+  return {
+    listAlternatives: overrides?.listAlternatives ?? vi.fn().mockResolvedValue([]),
+    applySwap: overrides?.applySwap ?? vi.fn().mockResolvedValue({ error: 'not called' }),
+  }
+}
 
 describe('chatWithCoach', () => {
   beforeEach(() => {
     process.env.OPENAI_API_KEY = 'test-key'
     mockCreate.mockReset()
-    mockCreate.mockResolvedValue({
-      choices: [{ message: { content: 'Resposta do treinador' } }],
-    })
   })
 
   afterEach(() => {
     vi.clearAllMocks()
   })
 
-  it('returns the assistant reply as plain text', async () => {
-    const result = await chatWithCoach([{ role: 'user', content: 'Por que esse exercício?' }], null)
+  it('returns the assistant reply directly when no tool call is made', async () => {
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: 'Isso é normal, pode continuar', tool_calls: undefined } }],
+    })
 
-    expect(result).toBe('Resposta do treinador')
+    const result = await chatWithCoach([{ role: 'user', content: 'Minha perna cansa rápido' }], null, makeTools())
+
+    expect(result).toEqual({ content: 'Isso é normal, pode continuar', swapped: null })
   })
 
-  it('sends no tools, since the coach chat never mutates the plan directly', async () => {
-    await chatWithCoach([{ role: 'user', content: 'Oi' }], null)
+  it('never sends the deterministic weekly-selection tools - only the two swap tools', async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: 'Oi', tool_calls: undefined } }] })
+
+    await chatWithCoach([{ role: 'user', content: 'Oi' }], null, makeTools())
 
     const callArgs = mockCreate.mock.calls[0][0]
-    expect(callArgs.tools).toBeUndefined()
+    const toolNames = callArgs.tools.map((t: { function: { name: string } }) => t.function.name)
+    expect(toolNames).toEqual(['listar_alternativas', 'trocar_exercicio'])
   })
 
-  it('includes the real plan context in the system prompt when provided', async () => {
+  it('calls listar_alternativas, feeds the result back, and returns the final text', async () => {
+    const listAlternatives = vi.fn().mockResolvedValue([{ id: 'ex-9', name: 'Elevação lateral' }])
+
+    mockCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call-1',
+                  type: 'function',
+                  function: { name: 'listar_alternativas', arguments: JSON.stringify({ workout_day_exercise_id: 'wde-1' }) },
+                },
+              ],
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: 'Que tal elevação lateral no lugar?', tool_calls: undefined } }],
+      })
+
+    const result = await chatWithCoach(
+      [{ role: 'user', content: 'Meu ombro dói nesse exercício' }],
+      null,
+      makeTools({ listAlternatives })
+    )
+
+    expect(listAlternatives).toHaveBeenCalledWith('wde-1')
+    expect(result.content).toBe('Que tal elevação lateral no lugar?')
+    expect(result.swapped).toBeNull()
+    expect(mockCreate).toHaveBeenCalledTimes(2)
+
+    // a segunda chamada precisa incluir a resposta da ferramenta como contexto
+    const secondCallMessages = mockCreate.mock.calls[1][0].messages
+    const toolMessage = secondCallMessages.find((m: { role: string }) => m.role === 'tool')
+    expect(JSON.parse(toolMessage.content)).toEqual([{ id: 'ex-9', name: 'Elevação lateral' }])
+  })
+
+  it('reports a real swap when trocar_exercicio succeeds', async () => {
+    const applySwap = vi.fn().mockResolvedValue({ id: 'ex-9', name: 'Lateral Raise', name_pt: 'Elevação lateral' })
+
+    mockCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call-1',
+                  type: 'function',
+                  function: {
+                    name: 'trocar_exercicio',
+                    arguments: JSON.stringify({ workout_day_exercise_id: 'wde-1', novo_exercicio_id: 'ex-9' }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: 'Troquei pra elevação lateral.', tool_calls: undefined } }],
+      })
+
+    const result = await chatWithCoach([{ role: 'user', content: 'Troca esse aí' }], null, makeTools({ applySwap }))
+
+    expect(applySwap).toHaveBeenCalledWith('wde-1', 'ex-9')
+    expect(result.swapped).toEqual({ workoutDayExerciseId: 'wde-1', id: 'ex-9', name: 'Elevação lateral' })
+  })
+
+  it('does not report a swap when trocar_exercicio fails', async () => {
+    const applySwap = vi.fn().mockResolvedValue({ error: 'Invalid replacement exercise' })
+
+    mockCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call-1',
+                  type: 'function',
+                  function: {
+                    name: 'trocar_exercicio',
+                    arguments: JSON.stringify({ workout_day_exercise_id: 'wde-1', novo_exercicio_id: 'ex-bad' }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: 'Não consegui trocar esse.', tool_calls: undefined } }],
+      })
+
+    const result = await chatWithCoach([{ role: 'user', content: 'Troca esse aí' }], null, makeTools({ applySwap }))
+
+    expect(result.swapped).toBeNull()
+  })
+
+  it('includes the day context with exercise ids in the system prompt', async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: 'Oi', tool_calls: undefined } }] })
+
     await chatWithCoach([{ role: 'user', content: 'Oi' }], {
       goal: 'hipertrofia',
       level: 'intermediario',
-      daysPerWeek: 4,
-      currentWeek: 2,
-      weekType: 'progressao',
-      days: [
-        {
-          dayLabel: 'Peito, Costas e Ombros',
-          exercises: [{ name: 'Supino reto', targetSets: 4, targetReps: 10, targetRir: '1-2' }],
-          cardio: null,
-        },
-      ],
-    })
+      dayLabel: 'Peito, Costas e Ombros',
+      exercises: [{ workoutDayExerciseId: 'wde-1', name: 'Supino reto', targetSets: 4, targetReps: 10, targetRir: '1-2' }],
+    }, makeTools())
 
-    const callArgs = mockCreate.mock.calls[0][0]
-    const systemMessage = callArgs.messages[0].content as string
-
-    expect(systemMessage).toContain('hipertrofia')
+    const systemMessage = mockCreate.mock.calls[0][0].messages[0].content as string
+    expect(systemMessage).toContain('wde-1')
     expect(systemMessage).toContain('Supino reto')
-    expect(systemMessage).toContain('Semana atual do plano: 2 de 4')
-  })
-
-  it('never uses markdown formatting instructions loosely - explicitly forbids it', async () => {
-    await chatWithCoach([{ role: 'user', content: 'Oi' }], null)
-
-    const callArgs = mockCreate.mock.calls[0][0]
-    const systemMessage = callArgs.messages[0].content as string
-
     expect(systemMessage).toContain('Nunca use markdown')
   })
 
   it('throws when OPENAI_API_KEY is missing', async () => {
     delete process.env.OPENAI_API_KEY
 
-    await expect(chatWithCoach([{ role: 'user', content: 'Oi' }], null)).rejects.toThrow(
+    await expect(chatWithCoach([{ role: 'user', content: 'Oi' }], null, makeTools())).rejects.toThrow(
       'Missing OPENAI_API_KEY'
     )
   })

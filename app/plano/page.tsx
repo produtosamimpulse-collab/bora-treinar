@@ -158,12 +158,6 @@ export default async function PlanoPage({
         </div>
         <div className="mt-1 flex shrink-0 flex-col items-end gap-1">
           <a
-            href="/plano/ajuda"
-            className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
-          >
-            Falar com o treinador
-          </a>
-          <a
             href="/progresso"
             className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
           >

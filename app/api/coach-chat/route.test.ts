@@ -2,39 +2,35 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockGetAuthenticatedUserId = vi.hoisted(() => vi.fn())
 const mockChatWithCoach = vi.hoisted(() => vi.fn())
+const mockGetSwapOptions = vi.hoisted(() => vi.fn())
+const mockApplySwap = vi.hoisted(() => vi.fn())
 const mockProfileMaybeSingle = vi.hoisted(() => vi.fn())
-const mockPlanMaybeSingle = vi.hoisted(() => vi.fn())
-const mockDaysSelect = vi.hoisted(() => vi.fn())
+const mockDayMaybeSingle = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/supabase/session', () => ({ getAuthenticatedUserId: mockGetAuthenticatedUserId }))
 vi.mock('@/lib/openai/coach-chat', () => ({ chatWithCoach: mockChatWithCoach }))
+vi.mock('@/lib/plan-engine/exercise-swap', () => ({
+  getSwapOptions: mockGetSwapOptions,
+  applySwap: mockApplySwap,
+}))
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: () => ({
     from: (table: string) => {
       if (table === 'profile') {
         return { select: () => ({ eq: () => ({ maybeSingle: mockProfileMaybeSingle }) }) }
       }
-      if (table === 'training_plan') {
-        return {
-          select: () => ({
-            eq: () => ({ order: () => ({ limit: () => ({ maybeSingle: mockPlanMaybeSingle }) }) }),
-          }),
-        }
-      }
       // table === 'workout_day'
-      return {
-        select: () => ({ eq: () => mockDaysSelect() }),
-      }
+      return { select: () => ({ eq: () => ({ maybeSingle: mockDayMaybeSingle }) }) }
     },
   }),
 }))
 
 import { POST } from './route'
 
-function makeRequest(messages: unknown) {
+function makeRequest(messages: unknown, workoutDayId = 'day-1') {
   return new Request('http://localhost/api/coach-chat', {
     method: 'POST',
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, workoutDayId }),
   })
 }
 
@@ -43,10 +39,11 @@ describe('POST /api/coach-chat', () => {
     mockGetAuthenticatedUserId.mockReset()
     mockGetAuthenticatedUserId.mockResolvedValue('user-1')
     mockChatWithCoach.mockReset()
-    mockChatWithCoach.mockResolvedValue('Resposta do treinador')
+    mockChatWithCoach.mockResolvedValue({ content: 'Resposta do treinador', swapped: null })
     mockProfileMaybeSingle.mockReset()
-    mockPlanMaybeSingle.mockReset()
-    mockDaysSelect.mockReset()
+    mockDayMaybeSingle.mockReset()
+    mockGetSwapOptions.mockReset()
+    mockApplySwap.mockReset()
   })
 
   it('returns 401 without a session', async () => {
@@ -64,36 +61,55 @@ describe('POST /api/coach-chat', () => {
     const response = await POST(makeRequest([{ role: 'user', content: 'Oi' }]))
     const body = await response.json()
 
-    expect(mockChatWithCoach).toHaveBeenCalledWith([{ role: 'user', content: 'Oi' }], null)
-    expect(body).toEqual({ content: 'Resposta do treinador' })
+    expect(mockChatWithCoach).toHaveBeenCalledWith(
+      [{ role: 'user', content: 'Oi' }],
+      null,
+      expect.objectContaining({ listAlternatives: expect.any(Function), applySwap: expect.any(Function) })
+    )
+    expect(body).toEqual({ content: 'Resposta do treinador', swapped: null })
   })
 
-  it('builds the plan context from the profile and current week when a plan exists', async () => {
+  it('passes null context when the day does not belong to the caller', async () => {
     mockProfileMaybeSingle.mockResolvedValue({
-      data: { goal: 'hipertrofia', level: 'intermediario', days_per_week: 4 },
+      data: { goal: 'hipertrofia', level: 'intermediario' },
       error: null,
     })
-    mockPlanMaybeSingle.mockResolvedValue({ data: { id: 'plan-1' }, error: null })
-    mockDaysSelect.mockResolvedValue({
-      data: [
-        {
-          day_label: 'Upper',
-          week_number: 1,
-          week_type: 'calibracao',
-          cardio_minutes: null,
-          cardio_intensity: null,
-          cardio_exercise: null,
-          workout_day_exercise: [
-            {
-              target_sets: 4,
-              target_reps: 10,
-              target_rir: '2-3',
-              exercise: { name: 'Bench Press', name_pt: 'Supino Reto' },
-            },
-          ],
-          workout_session: [{ completed: false }],
-        },
-      ],
+    mockDayMaybeSingle.mockResolvedValue({
+      data: {
+        id: 'day-1',
+        day_label: 'Upper',
+        training_plan: { user_id: 'someone-else' },
+        workout_day_exercise: [],
+      },
+      error: null,
+    })
+
+    await POST(makeRequest([{ role: 'user', content: 'Oi' }]))
+
+    const [, context] = mockChatWithCoach.mock.calls[0]
+    expect(context).toBeNull()
+  })
+
+  it('builds the day context with workout_day_exercise ids for an owned day', async () => {
+    mockProfileMaybeSingle.mockResolvedValue({
+      data: { goal: 'hipertrofia', level: 'intermediario' },
+      error: null,
+    })
+    mockDayMaybeSingle.mockResolvedValue({
+      data: {
+        id: 'day-1',
+        day_label: 'Upper',
+        training_plan: { user_id: 'user-1' },
+        workout_day_exercise: [
+          {
+            id: 'wde-1',
+            target_sets: 4,
+            target_reps: 10,
+            target_rir: '2-3',
+            exercise: { name: 'Bench Press', name_pt: 'Supino Reto' },
+          },
+        ],
+      },
       error: null,
     })
 
@@ -103,16 +119,20 @@ describe('POST /api/coach-chat', () => {
     expect(context).toEqual({
       goal: 'hipertrofia',
       level: 'intermediario',
-      daysPerWeek: 4,
-      currentWeek: 1,
-      weekType: 'calibracao',
-      days: [
-        {
-          dayLabel: 'Peito, Costas e Ombros',
-          exercises: [{ name: 'Supino Reto', targetSets: 4, targetReps: 10, targetRir: '2-3' }],
-          cardio: null,
-        },
-      ],
+      dayLabel: 'Peito, Costas e Ombros',
+      exercises: [{ workoutDayExerciseId: 'wde-1', name: 'Supino Reto', targetSets: 4, targetReps: 10, targetRir: '2-3' }],
     })
+  })
+
+  it('wires the tool functions to the shared swap module with the authenticated user id', async () => {
+    mockProfileMaybeSingle.mockResolvedValue({ data: null, error: null })
+    mockGetSwapOptions.mockResolvedValue([{ id: 'ex-2', name: 'Elevação lateral' }])
+
+    await POST(makeRequest([{ role: 'user', content: 'Oi' }]))
+
+    const [, , tools] = mockChatWithCoach.mock.calls[0]
+    await tools.listAlternatives('wde-1')
+
+    expect(mockGetSwapOptions).toHaveBeenCalledWith(expect.anything(), 'wde-1', 'user-1')
   })
 })
