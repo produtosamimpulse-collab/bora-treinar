@@ -19,8 +19,28 @@ const anton = Anton({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://boratreinar.amimpulse.com.br"),
   title: "Bora Treinar!",
   description: "Seu personal trainer com IA",
+  appleWebApp: {
+    title: "Bora Treinar!",
+    statusBarStyle: "black-translucent",
+  },
+  openGraph: {
+    title: "Bora Treinar!",
+    description: "Seu personal trainer com IA",
+    url: "https://boratreinar.amimpulse.com.br",
+    siteName: "Bora Treinar!",
+    images: [{ url: "/og-image.png", width: 1200, height: 1200 }],
+    locale: "pt_BR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Bora Treinar!",
+    description: "Seu personal trainer com IA",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
