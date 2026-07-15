@@ -1,11 +1,11 @@
 const PUBLIC_PATHS = [
   '/login',
-  '/icon.png',
-  '/apple-icon.png',
+  '/icon.jpg',
+  '/apple-icon.jpg',
   '/manifest.webmanifest',
-  '/og-image.png',
-  '/icon-192.png',
-  '/icon-512.png',
+  '/og-image.jpg',
+  '/icon-192.jpg',
+  '/icon-512.jpg',
 ]
 
 export function isPublicPath(pathname: string): boolean {

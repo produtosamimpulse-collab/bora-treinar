@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     description: "Seu personal trainer com IA",
     url: "https://boratreinar.amimpulse.com.br",
     siteName: "Bora Treinar!",
-    images: [{ url: "/og-image.png", width: 1200, height: 1200 }],
+    images: [{ url: "/og-image.jpg", width: 1200, height: 1200 }],
     locale: "pt_BR",
     type: "website",
   },
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Bora Treinar!",
     description: "Seu personal trainer com IA",
-    images: ["/og-image.png"],
+    images: ["/og-image.jpg"],
   },
 };
 
