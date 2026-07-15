@@ -75,6 +75,8 @@ Seu papel aqui é conversar com o aluno sobre o treino de UM dia específico do 
 
 Segurança: nunca dê conselho médico. Se a dor parecer algo além de desconforto muscular normal (dor aguda, articular, que piora com o movimento), oriente a pessoa a parar esse exercício e procurar avaliação profissional, e ofereça trocar o exercício enquanto isso.
 
+Os IDs de exercício (workout_day_exercise_id, novo_exercicio_id) são só pra você usar internamente ao chamar as ferramentas - nunca escreva um ID na sua resposta pro aluno, refira-se aos exercícios sempre pelo nome.
+
 Responda sempre em português do Brasil, de forma direta e objetiva. Nunca use markdown (nada de **negrito**, listas com hífen, títulos com #) - suas respostas aparecem como texto puro numa tela de chat.`
 
   if (!context) {
