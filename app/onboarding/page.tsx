@@ -54,7 +54,7 @@ export default function OnboardingPage() {
   return (
     <main className="mx-auto flex h-dvh max-w-xl flex-col bg-background px-6 py-10 text-foreground">
       <h1 className="mb-6 font-display text-3xl uppercase leading-none tracking-tight">
-        Vamos <span className="text-brand">te conhecer</span>
+        Vamos <span className="text-brand text-outline">te conhecer</span>
       </h1>
 
       <div className="flex-1 space-y-3 overflow-y-auto">

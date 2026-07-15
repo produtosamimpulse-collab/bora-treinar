@@ -93,7 +93,7 @@ export default async function ProgressoPage() {
           Histórico
         </span>
         <h1 className="font-display text-4xl uppercase leading-none tracking-tight sm:text-5xl">
-          Seu <span className="text-brand">progresso</span>
+          Seu <span className="text-brand text-outline">progresso</span>
         </h1>
       </header>
 
@@ -140,7 +140,7 @@ export default async function ProgressoPage() {
                 <p className="text-sm text-foreground/70">
                   {exercise.changed ? (
                     <>
-                      {exercise.firstLoad}kg <span className="text-brand">→</span> {exercise.lastLoad}kg
+                      {exercise.firstLoad}kg <span className="text-brand text-outline">→</span> {exercise.lastLoad}kg
                     </>
                   ) : (
                     <>{exercise.lastLoad}kg</>

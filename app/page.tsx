@@ -32,7 +32,7 @@ export default async function Home() {
         <h1 className="font-display text-5xl uppercase leading-[0.95] tracking-tight sm:text-8xl">
           Bora
           <br />
-          <span className="text-brand">Treinar!</span>
+          <span className="text-brand text-outline">Treinar!</span>
         </h1>
 
         <p className="mx-auto mt-6 max-w-md text-base text-foreground/70">

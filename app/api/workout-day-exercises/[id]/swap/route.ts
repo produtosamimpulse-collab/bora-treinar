@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getAuthenticatedUserId } from '@/lib/supabase/session'
 
-const EXCLUDED_EQUIPMENT = ['assisted', 'assisted (towel)']
-
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getAuthenticatedUserId()
 
@@ -12,6 +10,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params
+  const { exerciseId } = (await request.json()) as { exerciseId: string }
+
+  if (!exerciseId) {
+    return NextResponse.json({ error: 'Missing exerciseId' }, { status: 400 })
+  }
+
   const supabase = createServerSupabaseClient()
 
   const { data: current, error: currentError } = await supabase
@@ -34,41 +38,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Exercise not found' }, { status: 404 })
   }
 
-  const { data: usedRows } = await supabase
-    .from('workout_day_exercise')
-    .select('exercise_id')
-    .eq('workout_day_id', current.workout_day_id)
-
-  const usedIds = (usedRows ?? []).map((row) => row.exercise_id)
   const target = (current.exercise as unknown as { target: string }).target
 
-  const { data: candidates, error: candidateError } = await supabase
+  const { data: chosen, error: chosenError } = await supabase
     .from('exercise')
     .select('id, name, name_pt')
+    .eq('id', exerciseId)
     .eq('target', target)
-    .not('id', 'in', `(${usedIds.join(',')})`)
-    .not('equipment', 'in', `(${EXCLUDED_EQUIPMENT.map((e) => `"${e}"`).join(',')})`)
-    .not('name', 'ilike', '%towel%')
-    .limit(1)
+    .maybeSingle()
 
-  if (candidateError) {
-    throw new Error(candidateError.message)
+  if (chosenError) {
+    throw new Error(chosenError.message)
   }
 
-  const candidate = candidates?.[0]
-
-  if (!candidate) {
-    return NextResponse.json({ error: 'No alternative exercise available' }, { status: 404 })
+  if (!chosen) {
+    return NextResponse.json({ error: 'Invalid replacement exercise' }, { status: 400 })
   }
 
   const { error: updateError } = await supabase
     .from('workout_day_exercise')
-    .update({ exercise_id: candidate.id })
+    .update({ exercise_id: chosen.id })
     .eq('id', id)
 
   if (updateError) {
     throw new Error(updateError.message)
   }
 
-  return NextResponse.json(candidate)
+  return NextResponse.json(chosen)
 }

@@ -69,7 +69,7 @@ export default async function PlanoPage({
       return (
         <main className="min-h-dvh bg-background p-6 text-foreground">
           <p>Você ainda não tem um plano.</p>
-          <a href="/onboarding" className="mt-4 inline-block text-brand underline underline-offset-4">
+          <a href="/onboarding" className="mt-4 inline-block text-brand text-outline underline underline-offset-4">
             Começar meu plano
           </a>
         </main>
@@ -153,10 +153,16 @@ export default async function PlanoPage({
             {currentWeekType && WEEK_TYPE_LABEL[currentWeekType] ? `, ${WEEK_TYPE_LABEL[currentWeekType]}` : ''}
           </span>
           <h1 className="font-display text-4xl uppercase leading-none tracking-tight sm:text-5xl">
-            Seu <span className="text-brand">plano</span>
+            Seu <span className="text-brand text-outline">plano</span>
           </h1>
         </div>
         <div className="mt-1 flex shrink-0 flex-col items-end gap-1">
+          <a
+            href="/plano/ajuda"
+            className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
+          >
+            Falar com o treinador
+          </a>
           <a
             href="/progresso"
             className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"

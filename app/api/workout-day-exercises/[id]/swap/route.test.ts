@@ -2,8 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockGetAuthenticatedUserId = vi.hoisted(() => vi.fn())
 const mockCurrentSingle = vi.hoisted(() => vi.fn())
-const mockUsedSelect = vi.hoisted(() => vi.fn())
-const mockCandidateLimit = vi.hoisted(() => vi.fn())
+const mockChosenMaybeSingle = vi.hoisted(() => vi.fn())
 const mockUpdateEq = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
 
 vi.mock('@/lib/supabase/session', () => ({ getAuthenticatedUserId: mockGetAuthenticatedUserId }))
@@ -12,25 +11,14 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (table: string) => {
       if (table === 'workout_day_exercise') {
         return {
-          select: (columns: string) => {
-            if (columns.includes('exercise:exercise_id')) {
-              return { eq: () => ({ single: mockCurrentSingle }) }
-            }
-            return { eq: () => mockUsedSelect() }
-          },
+          select: () => ({ eq: () => ({ single: mockCurrentSingle }) }),
           update: () => ({ eq: mockUpdateEq }),
         }
       }
       // table === 'exercise'
       return {
         select: () => ({
-          eq: () => ({
-            not: () => ({
-              not: () => ({
-                not: () => ({ limit: mockCandidateLimit }),
-              }),
-            }),
-          }),
+          eq: () => ({ eq: () => ({ maybeSingle: mockChosenMaybeSingle }) }),
         }),
       }
     },
@@ -51,20 +39,26 @@ function makeCurrentRow(overrides?: { ownerUserId?: string }) {
   }
 }
 
+function makeRequest(body: unknown) {
+  return new Request('http://localhost/api/workout-day-exercises/wde-1/swap', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 describe('POST /api/workout-day-exercises/:id/swap', () => {
   beforeEach(() => {
     mockGetAuthenticatedUserId.mockReset()
     mockGetAuthenticatedUserId.mockResolvedValue('user-1')
     mockCurrentSingle.mockReset()
-    mockUsedSelect.mockReset()
-    mockCandidateLimit.mockReset()
+    mockChosenMaybeSingle.mockReset()
     mockUpdateEq.mockClear()
   })
 
   it('returns 401 when there is no authenticated session', async () => {
     mockGetAuthenticatedUserId.mockResolvedValue(null)
 
-    const response = await POST(new Request('http://localhost/api/workout-day-exercises/wde-1/swap', { method: 'POST' }), {
+    const response = await POST(makeRequest({ exerciseId: 'ex-2' }), {
       params: Promise.resolve({ id: 'wde-1' }),
     })
 
@@ -77,27 +71,22 @@ describe('POST /api/workout-day-exercises/:id/swap', () => {
       error: null,
     })
 
-    const response = await POST(new Request('http://localhost/api/workout-day-exercises/wde-1/swap', { method: 'POST' }), {
+    const response = await POST(makeRequest({ exerciseId: 'ex-2' }), {
       params: Promise.resolve({ id: 'wde-1' }),
     })
 
     expect(response.status).toBe(404)
-    expect(mockUsedSelect).not.toHaveBeenCalled()
     expect(mockUpdateEq).not.toHaveBeenCalled()
   })
 
-  it('swaps to a different exercise with the same target', async () => {
-    mockCurrentSingle.mockResolvedValue({
-      data: makeCurrentRow(),
-      error: null,
-    })
-    mockUsedSelect.mockResolvedValue({ data: [{ exercise_id: 'ex-1' }], error: null })
-    mockCandidateLimit.mockResolvedValue({
-      data: [{ id: 'ex-2', name: 'Bench Press', name_pt: 'Supino Reto' }],
+  it('swaps to the chosen exercise when it shares the same target', async () => {
+    mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow(), error: null })
+    mockChosenMaybeSingle.mockResolvedValue({
+      data: { id: 'ex-2', name: 'Bench Press', name_pt: 'Supino Reto' },
       error: null,
     })
 
-    const response = await POST(new Request('http://localhost/api/workout-day-exercises/wde-1/swap', { method: 'POST' }), {
+    const response = await POST(makeRequest({ exerciseId: 'ex-2' }), {
       params: Promise.resolve({ id: 'wde-1' }),
     })
     const body = await response.json()
@@ -106,18 +95,25 @@ describe('POST /api/workout-day-exercises/:id/swap', () => {
     expect(body).toEqual({ id: 'ex-2', name: 'Bench Press', name_pt: 'Supino Reto' })
   })
 
-  it('returns an error when no alternative exercise is available', async () => {
-    mockCurrentSingle.mockResolvedValue({
-      data: makeCurrentRow(),
-      error: null,
-    })
-    mockUsedSelect.mockResolvedValue({ data: [{ exercise_id: 'ex-1' }], error: null })
-    mockCandidateLimit.mockResolvedValue({ data: [], error: null })
+  it('rejects a chosen exercise that does not exist or has a different target', async () => {
+    mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow(), error: null })
+    mockChosenMaybeSingle.mockResolvedValue({ data: null, error: null })
 
-    const response = await POST(new Request('http://localhost/api/workout-day-exercises/wde-1/swap', { method: 'POST' }), {
+    const response = await POST(makeRequest({ exerciseId: 'ex-wrong-target' }), {
       params: Promise.resolve({ id: 'wde-1' }),
     })
 
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(400)
+    expect(mockUpdateEq).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 when no exerciseId is provided', async () => {
+    mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow(), error: null })
+
+    const response = await POST(makeRequest({}), {
+      params: Promise.resolve({ id: 'wde-1' }),
+    })
+
+    expect(response.status).toBe(400)
   })
 })

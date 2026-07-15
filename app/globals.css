@@ -24,3 +24,30 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* O verde da marca (#c8ff00) tem contraste muito baixo como cor de texto
+   em cima de fundos claros. Um contorno preto fino resolve sem precisar
+   trocar a cor em si. */
+.text-outline {
+  -webkit-text-stroke: 0.6px black;
+  paint-order: stroke fill;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.confetti-piece {
+  position: absolute;
+  top: 0;
+  animation-name: confetti-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}

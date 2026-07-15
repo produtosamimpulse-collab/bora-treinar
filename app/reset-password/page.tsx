@@ -41,7 +41,7 @@ export default function ResetPasswordPage() {
           Nova senha
         </span>
         <h1 className="font-display text-3xl uppercase leading-none tracking-tight">
-          Bora <span className="text-brand">Treinar!</span>
+          Bora <span className="text-brand text-outline">Treinar!</span>
         </h1>
 
         {done ? (
