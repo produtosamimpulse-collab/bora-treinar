@@ -25,7 +25,7 @@ async function generateMonth(
   const volumeRange = getWeeklyVolumeRange(profile.level)
   const targetRir = getTargetRir(profile.level)
   const weekdays = assignWeekdays(profile.days_per_week)
-  const cardioPrescription = getCardioPrescription(profile.goal)
+  const cardioPrescription = getCardioPrescription(profile.goal, options.monthNumber)
   const cardioExercise = await selectCardioExercise(supabase)
 
   const weekSelection = await selectExercisesForWeek(

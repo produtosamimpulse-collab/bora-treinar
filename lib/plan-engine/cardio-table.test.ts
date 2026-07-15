@@ -33,4 +33,25 @@ describe('getCardioPrescription', () => {
       everyDay: false,
     })
   })
+
+  it('defaults to month 1 minutes when no month number is given', () => {
+    expect(getCardioPrescription('emagrecimento', 1)).toEqual(getCardioPrescription('emagrecimento'))
+  })
+
+  it('increases minutes by 5 per month as the person evolves', () => {
+    expect(getCardioPrescription('emagrecimento', 2).minutes).toBe(30)
+    expect(getCardioPrescription('emagrecimento', 3).minutes).toBe(35)
+  })
+
+  it('caps minutes per goal so cardio never overtakes recovery from strength work', () => {
+    expect(getCardioPrescription('emagrecimento', 12).minutes).toBe(45)
+    expect(getCardioPrescription('hipertrofia', 12).minutes).toBe(20)
+  })
+
+  it('keeps intensity and everyDay unchanged across months', () => {
+    const month1 = getCardioPrescription('condicionamento', 1)
+    const month4 = getCardioPrescription('condicionamento', 4)
+    expect(month4.intensity).toBe(month1.intensity)
+    expect(month4.everyDay).toBe(month1.everyDay)
+  })
 })

@@ -127,22 +127,6 @@ export default async function PlanoPage({
     .filter((day) => day.workout_session.some((s) => s.completed))
     .map((day) => day.id)
 
-  const upcomingWeeks = [currentWeek + 1, currentWeek + 2, currentWeek + 3]
-    .filter((week) => week <= 4)
-    .map((week) => ({
-      week,
-      weekType: allDays.find((day) => day.week_number === week)?.week_type ?? null,
-      days: allDays
-        .filter((day) => day.week_number === week)
-        .map((day) => ({
-          id: day.id,
-          dayLabel: translateDayLabel(day.day_label),
-          exerciseNames: day.workout_day_exercise.map(
-            (item) => item.exercise.name_pt ?? item.exercise.name
-          ),
-        })),
-    }))
-
   return (
     <main className="min-h-dvh bg-background px-6 py-10 text-foreground sm:px-10">
       <header className="mb-10 flex items-start justify-between gap-4">
@@ -156,49 +140,15 @@ export default async function PlanoPage({
             Seu <span className="text-brand text-outline">plano</span>
           </h1>
         </div>
-        <div className="mt-1 flex shrink-0 flex-col items-end gap-1">
-          <a
-            href="/progresso"
-            className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
-          >
-            Progresso
-          </a>
-          <a
-            href="/trocar-senha"
-            className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
-          >
-            Trocar senha
-          </a>
-        </div>
+        <a
+          href="/progresso"
+          className="mt-1 shrink-0 text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
+        >
+          Progresso
+        </a>
       </header>
 
       <PlanoInterativo days={formattedDays} initialCompletedDayIds={completedDayIds} />
-
-      {upcomingWeeks.length > 0 && (
-        <section className="mt-10">
-          <h2 className="mb-4 font-display text-xl uppercase tracking-tight text-foreground/60">
-            Próximas semanas
-          </h2>
-          <div className="space-y-4">
-            {upcomingWeeks.map((week) => (
-              <div key={week.week} className="rounded-2xl border border-border-subtle bg-surface p-4 opacity-70 sm:p-6">
-                <p className="mb-3 text-xs font-medium uppercase tracking-widest text-foreground/60">
-                  Semana {week.week}
-                  {week.weekType && WEEK_TYPE_LABEL[week.weekType] ? `, ${WEEK_TYPE_LABEL[week.weekType]}` : ''}
-                </p>
-                <ul className="space-y-2">
-                  {week.days.map((day) => (
-                    <li key={day.id} className="text-sm">
-                      <span className="font-medium">{day.dayLabel}:</span>{' '}
-                      <span className="text-foreground/60">{day.exerciseNames.join(', ')}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </main>
   )
 }

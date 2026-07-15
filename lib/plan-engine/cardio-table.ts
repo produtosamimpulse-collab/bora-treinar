@@ -18,8 +18,26 @@ const CARDIO_BY_GOAL: Record<Goal, CardioPrescription> = {
   hipertrofia: { minutes: 12, intensity: 'leve', everyDay: false },
 }
 
-export function getCardioPrescription(goal: Goal): CardioPrescription {
-  return CARDIO_BY_GOAL[goal]
+// Teto por objetivo: cardio evolui mês a mês junto com o condicionamento,
+// mas nunca a ponto de comprometer a recuperação do treino de força.
+const CARDIO_MAX_MINUTES: Record<Goal, number> = {
+  emagrecimento: 45,
+  condicionamento: 35,
+  saude_geral: 30,
+  hipertrofia: 20,
+}
+
+const MINUTES_INCREMENT_PER_MONTH = 5
+
+export function getCardioPrescription(goal: Goal, monthNumber = 1): CardioPrescription {
+  const base = CARDIO_BY_GOAL[goal]
+  const monthsElapsed = Math.max(0, monthNumber - 1)
+  const minutes = Math.min(
+    base.minutes + monthsElapsed * MINUTES_INCREMENT_PER_MONTH,
+    CARDIO_MAX_MINUTES[goal]
+  )
+
+  return { ...base, minutes }
 }
 
 export async function selectCardioExercise(
