@@ -6,6 +6,10 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/login')).toBe(true)
   })
 
+  it('treats the keep-alive cron endpoint as public', () => {
+    expect(isPublicPath('/api/keep-alive')).toBe(true)
+  })
+
   it('treats other paths as protected', () => {
     expect(isPublicPath('/')).toBe(false)
     expect(isPublicPath('/treino')).toBe(false)

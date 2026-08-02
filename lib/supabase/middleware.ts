@@ -1,5 +1,6 @@
 const PUBLIC_PATHS = [
   '/login',
+  '/api/keep-alive',
   '/icon.jpg',
   '/apple-icon.jpg',
   '/manifest.webmanifest',
