@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server'
 import { chatWithTool, type ChatMessage } from '@/lib/openai/client'
 import { generateFirstMonth } from '@/lib/plan-engine/generate-month'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { getAuthenticatedUserId } from '@/lib/supabase/session'
+import { requireUserId } from '@/lib/supabase/require-user'
 
 export async function POST(request: Request) {
-  const userId = await getAuthenticatedUserId()
+  const userId = await requireUserId()
 
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (userId instanceof NextResponse) {
+    return userId
   }
 
   const { messages } = (await request.json()) as { messages: ChatMessage[] }

@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { getAuthenticatedUserId } from '@/lib/supabase/session'
+import { requireUserId } from '@/lib/supabase/require-user'
 import { translateDayLabel } from '@/lib/plan-engine/label-i18n'
 import { getSwapOptions, applySwap } from '@/lib/plan-engine/exercise-swap'
+import { searchExercises, rebuildDay } from '@/lib/plan-engine/rebuild-day'
+import { getVolumeForGoal } from '@/lib/plan-engine/volume-table'
+import type { OnboardingProfile } from '@/lib/openai/client'
 import { chatWithCoach, type DayContext } from '@/lib/openai/coach-chat'
 import type { ChatMessage } from '@/lib/openai/client'
 
@@ -59,15 +62,16 @@ async function buildDayContext(
     goal: profile.goal,
     level: profile.level,
     dayLabel: translateDayLabel(day.day_label as string),
+    exercisesPerDay: getVolumeForGoal(profile.goal as OnboardingProfile['goal']).exercisesPerDay,
     exercises,
   }
 }
 
 export async function POST(request: Request) {
-  const userId = await getAuthenticatedUserId()
+  const userId = await requireUserId()
 
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (userId instanceof NextResponse) {
+    return userId
   }
 
   const { messages, workoutDayId } = (await request.json()) as {
@@ -82,6 +86,8 @@ export async function POST(request: Request) {
     listAlternatives: (workoutDayExerciseId) => getSwapOptions(supabase, workoutDayExerciseId, userId),
     applySwap: (workoutDayExerciseId, exerciseId) =>
       applySwap(supabase, workoutDayExerciseId, exerciseId, userId),
+    searchExercises: (criteria) => searchExercises(supabase, criteria),
+    rebuildDay: (input) => rebuildDay(supabase, workoutDayId, userId, input),
   })
 
   return NextResponse.json(result)

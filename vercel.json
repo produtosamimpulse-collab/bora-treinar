@@ -1,5 +1,5 @@
 {
-  "regions": ["gru1"],
+  "regions": ["pdx1"],
   "crons": [
     {
       "path": "/api/keep-alive",

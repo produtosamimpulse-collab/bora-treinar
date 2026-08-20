@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import Image from 'next/image'
 import Confetti from '@/app/components/Confetti'
+import ExerciseSwapPanel from '@/app/components/ExerciseSwapPanel'
+import CoachChatPanel from '@/app/components/CoachChatPanel'
+import { useExerciseSwap } from '@/app/plano/useExerciseSwap'
+import { useCoachChat } from '@/app/plano/useCoachChat'
 
 type Exercise = {
   id: string
@@ -12,6 +18,7 @@ type Exercise = {
   targetReps: number
   targetLoadKg: number | null
   targetRir: string | null
+  setsDone: number
 }
 
 type Draft = { reps: string; load: string; rir: string }
@@ -32,19 +39,20 @@ export default function ExecucaoGuiada({
   const router = useRouter()
   const audioRef = useRef<HTMLAudioElement>(null)
 
-  const [exerciseNames, setExerciseNames] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {}
-    for (const exercise of initialExercises) initial[exercise.id] = exercise.name
-    return initial
-  })
-  const [exerciseIds, setExerciseIds] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {}
-    for (const exercise of initialExercises) initial[exercise.id] = exercise.exerciseId
-    return initial
-  })
+  const swap = useExerciseSwap(initialExercises)
+  // Aqui a tela guarda séries já registradas, cronômetro de descanso e
+  // rascunhos por exercício - se o treinador refizer o dia inteiro no meio
+  // da execução, nada disso vale mais, então a tela pede pra recarregar em
+  // vez de tentar remendar o estado antigo com exercícios novos.
+  const [rebuiltDayLabel, setRebuiltDayLabel] = useState<string | null>(null)
+  const chat = useCoachChat(workoutDayId, swap.applySwapResult, (rebuiltDay) =>
+    setRebuiltDayLabel(rebuiltDay.dayLabel)
+  )
+  const [chatOpen, setChatOpen] = useState(false)
+
   const [currentSetByExercise, setCurrentSetByExercise] = useState<Record<string, number>>(() => {
     const initial: Record<string, number> = {}
-    for (const exercise of initialExercises) initial[exercise.id] = 1
+    for (const exercise of initialExercises) initial[exercise.id] = exercise.setsDone + 1
     return initial
   })
   const [inputs, setInputs] = useState<Record<string, Draft>>(() => {
@@ -60,10 +68,6 @@ export default function ExecucaoGuiada({
   const [completedTrainingPlanId, setCompletedTrainingPlanId] = useState<string | null>(null)
   const [finishing, setFinishing] = useState(false)
   const [finishError, setFinishError] = useState<string | null>(null)
-  const [loadingOptionsFor, setLoadingOptionsFor] = useState<string | null>(null)
-  const [swapOptionsFor, setSwapOptionsFor] = useState<string | null>(null)
-  const [swapOptions, setSwapOptions] = useState<{ id: string; name: string }[]>([])
-  const [applyingOptionId, setApplyingOptionId] = useState<string | null>(null)
 
   function updateDraft(exerciseId: string, field: keyof Draft, value: string) {
     setInputs((current) => ({
@@ -77,15 +81,18 @@ export default function ExecucaoGuiada({
       return
     }
 
-    if (resting.secondsLeft <= 0) {
-      setResting(null)
-      return
-    }
+    // Some direto pra null no último segundo em vez de passar por um estado
+    // intermediário com secondsLeft <= 0 - evita precisar de um setState
+    // síncrono no corpo do efeito (dispara uma cascata de renders extra).
+    const timeout = setTimeout(() => {
+      setResting((current) => {
+        if (!current || current.secondsLeft <= 1) {
+          return null
+        }
+        return { ...current, secondsLeft: current.secondsLeft - 1 }
+      })
+    }, 1000)
 
-    const timeout = setTimeout(
-      () => setResting((current) => (current ? { ...current, secondsLeft: current.secondsLeft - 1 } : null)),
-      1000
-    )
     return () => clearTimeout(timeout)
   }, [resting])
 
@@ -137,7 +144,7 @@ export default function ExecucaoGuiada({
     }
 
     if ('mediaSession' in navigator) {
-      const exerciseName = exerciseNames[resting.exerciseId] ?? ''
+      const exerciseName = swap.exerciseNames[resting.exerciseId] ?? ''
 
       navigator.mediaSession.metadata = new MediaMetadata({
         title: `Descanso: ${resting.secondsLeft}s`,
@@ -149,7 +156,21 @@ export default function ExecucaoGuiada({
     }
 
     audioRef.current?.play().catch(() => {})
-  }, [resting, exerciseNames])
+  }, [resting, swap.exerciseNames])
+
+  // Se todas as séries já estavam concluídas quando a página carregou (ex: o
+  // app fechou antes do finish() rodar da última vez), completa o treino
+  // automaticamente em vez de deixar preso numa tela sem próxima ação.
+  useEffect(() => {
+    const allDoneOnLoad =
+      initialExercises.length > 0 &&
+      initialExercises.every((exercise) => exercise.setsDone >= exercise.targetSets)
+
+    if (allDoneOnLoad) {
+      finishWorkout()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function finishWorkout() {
     setFinishing(true)
@@ -184,7 +205,7 @@ export default function ExecucaoGuiada({
   async function logSet(exercise: Exercise) {
     const setNumber = currentSetByExercise[exercise.id]
     const draft = inputs[exercise.id]
-    const currentExerciseId = exerciseIds[exercise.id]
+    const currentExerciseId = swap.exerciseIds[exercise.id]
 
     setSavingId(exercise.id)
     setErrorByExercise((current) => ({ ...current, [exercise.id]: null }))
@@ -237,58 +258,6 @@ export default function ExecucaoGuiada({
     }
   }
 
-  async function openSwapOptions(workoutDayExerciseId: string) {
-    if (swapOptionsFor === workoutDayExerciseId) {
-      setSwapOptionsFor(null)
-      return
-    }
-
-    setLoadingOptionsFor(workoutDayExerciseId)
-
-    try {
-      const response = await fetch(`/api/workout-day-exercises/${workoutDayExerciseId}/swap-options`)
-
-      if (!response.ok) {
-        return
-      }
-
-      const options = await response.json()
-      setSwapOptions(options)
-      setSwapOptionsFor(workoutDayExerciseId)
-    } finally {
-      setLoadingOptionsFor(null)
-    }
-  }
-
-  async function chooseSwapOption(workoutDayExerciseId: string, exerciseId: string) {
-    setApplyingOptionId(exerciseId)
-
-    try {
-      const response = await fetch(`/api/workout-day-exercises/${workoutDayExerciseId}/swap`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ exerciseId }),
-      })
-
-      if (!response.ok) {
-        return
-      }
-
-      const newExercise = await response.json()
-      setExerciseNames((current) => ({
-        ...current,
-        [workoutDayExerciseId]: newExercise.name_pt ?? newExercise.name,
-      }))
-      setExerciseIds((current) => ({
-        ...current,
-        [workoutDayExerciseId]: newExercise.id,
-      }))
-      setSwapOptionsFor(null)
-    } finally {
-      setApplyingOptionId(null)
-    }
-  }
-
   if (monthCompleted) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-6 text-center text-foreground">
@@ -338,12 +307,12 @@ export default function ExecucaoGuiada({
 
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <a
+          <Link
             href="/plano"
             className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
           >
             ← Voltar pro plano
-          </a>
+          </Link>
           <h1 className="mt-2 break-words font-display text-2xl uppercase leading-tight sm:text-3xl">
             {dayLabel}
           </h1>
@@ -375,7 +344,7 @@ export default function ExecucaoGuiada({
           const draft = inputs[exercise.id]
           const isSaving = savingId === exercise.id
           const isResting = resting?.exerciseId === exercise.id
-          const name = exerciseNames[exercise.id]
+          const name = swap.exerciseNames[exercise.id]
 
           return (
             <li
@@ -383,11 +352,14 @@ export default function ExecucaoGuiada({
               className={`rounded-2xl border border-border-subtle bg-surface p-4 sm:p-6 ${done ? 'opacity-60' : ''}`}
             >
               <div className="flex items-center gap-4">
-                <img
-                  src={`/api/exercises/${exerciseIds[exercise.id]}/gif`}
+                <Image
+                  src={`/api/exercises/${swap.exerciseIds[exercise.id]}/gif`}
                   alt={name}
-                  className="h-16 w-16 shrink-0 rounded-lg object-cover"
+                  width={64}
+                  height={64}
+                  unoptimized
                   loading="lazy"
+                  className="h-16 w-16 shrink-0 rounded-lg object-cover"
                 />
                 <div className="flex-1">
                   <p className="text-sm font-medium capitalize">{name}</p>
@@ -405,38 +377,21 @@ export default function ExecucaoGuiada({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => openSwapOptions(exercise.id)}
-                    disabled={loadingOptionsFor === exercise.id}
+                    onClick={() => swap.openSwapOptions(exercise.id)}
+                    disabled={swap.loadingOptionsFor === exercise.id}
                     className="min-h-11 shrink-0 rounded-full border border-border-subtle px-3 text-xs font-semibold uppercase tracking-wide text-foreground/70 disabled:opacity-50"
                   >
-                    {loadingOptionsFor === exercise.id ? '...' : 'Trocar'}
+                    {swap.loadingOptionsFor === exercise.id ? '...' : 'Trocar'}
                   </button>
                 )}
               </div>
 
-              {swapOptionsFor === exercise.id && (
-                <div className="mt-3 rounded-xl border border-border-subtle bg-background p-3">
-                  {swapOptions.length === 0 ? (
-                    <p className="text-xs text-foreground/60">
-                      Nenhuma alternativa disponível pra esse grupo muscular.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {swapOptions.map((option) => (
-                        <li key={option.id}>
-                          <button
-                            type="button"
-                            onClick={() => chooseSwapOption(exercise.id, option.id)}
-                            disabled={applyingOptionId === option.id}
-                            className="min-h-11 w-full rounded-lg border border-border-subtle px-3 text-left text-sm capitalize hover:border-brand disabled:opacity-50"
-                          >
-                            {option.name}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+              {swap.swapOptionsFor === exercise.id && (
+                <ExerciseSwapPanel
+                  options={swap.swapOptions}
+                  applyingOptionId={swap.applyingOptionId}
+                  onChoose={(exerciseId) => swap.chooseSwapOption(exercise.id, exerciseId)}
+                />
               )}
 
               {!done && (
@@ -505,6 +460,39 @@ export default function ExecucaoGuiada({
           )
         })}
       </ul>
+
+      <button
+        type="button"
+        onClick={() => setChatOpen((current) => !current)}
+        className="mt-6 min-h-11 w-full rounded-xl border border-border-subtle px-4 text-left text-sm font-medium text-foreground/80"
+      >
+        {chatOpen ? 'Fechar conversa' : 'Falar com o treinador ou mudar esse treino'}
+      </button>
+
+      {chatOpen && (
+        <CoachChatPanel
+          messages={chat.messages}
+          input={chat.input}
+          onInputChange={chat.setInput}
+          onSend={chat.send}
+          loading={chat.loading}
+        />
+      )}
+
+      {rebuiltDayLabel && (
+        <div className="mt-6 rounded-2xl border border-brand/40 bg-surface p-4 text-center">
+          <p className="text-sm">
+            Treino de hoje refeito: {rebuiltDayLabel}. Recarregue pra começar o treino novo.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-3 min-h-11 rounded-full bg-brand px-6 text-sm font-semibold uppercase tracking-wide text-black"
+          >
+            Ver treino novo
+          </button>
+        </div>
+      )}
     </main>
   )
 }

@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { getAuthenticatedUserId } from '@/lib/supabase/session'
+import { requireUserId } from '@/lib/supabase/require-user'
 import { applySwap } from '@/lib/plan-engine/exercise-swap'
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const userId = await getAuthenticatedUserId()
+  const userId = await requireUserId()
 
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (userId instanceof NextResponse) {
+    return userId
   }
 
   const { id } = await params

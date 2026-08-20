@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { getAuthenticatedUserId } from '@/lib/supabase/session'
+import { requireUserId } from '@/lib/supabase/require-user'
 import { applyWeek1Progression } from '@/lib/plan-engine/apply-progression'
 
 async function isWeekComplete(
@@ -24,10 +24,10 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ workoutDayId: string }> }
 ) {
-  const userId = await getAuthenticatedUserId()
+  const userId = await requireUserId()
 
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (userId instanceof NextResponse) {
+    return userId
   }
 
   const { workoutDayId } = await params

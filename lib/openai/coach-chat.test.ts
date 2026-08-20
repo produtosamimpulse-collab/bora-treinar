@@ -14,6 +14,8 @@ function makeTools(overrides?: Partial<CoachTools>): CoachTools {
   return {
     listAlternatives: overrides?.listAlternatives ?? vi.fn().mockResolvedValue([]),
     applySwap: overrides?.applySwap ?? vi.fn().mockResolvedValue({ error: 'not called' }),
+    searchExercises: overrides?.searchExercises ?? vi.fn().mockResolvedValue([]),
+    rebuildDay: overrides?.rebuildDay ?? vi.fn().mockResolvedValue({ error: 'not called' }),
   }
 }
 
@@ -34,17 +36,22 @@ describe('chatWithCoach', () => {
 
     const result = await chatWithCoach([{ role: 'user', content: 'Minha perna cansa rápido' }], null, makeTools())
 
-    expect(result).toEqual({ content: 'Isso é normal, pode continuar', swapped: null })
+    expect(result).toEqual({ content: 'Isso é normal, pode continuar', swapped: null, rebuilt: null })
   })
 
-  it('never sends the deterministic weekly-selection tools - only the two swap tools', async () => {
+  it('exposes only the four tools that touch the plan through the engine', async () => {
     mockCreate.mockResolvedValue({ choices: [{ message: { content: 'Oi', tool_calls: undefined } }] })
 
     await chatWithCoach([{ role: 'user', content: 'Oi' }], null, makeTools())
 
     const callArgs = mockCreate.mock.calls[0][0]
     const toolNames = callArgs.tools.map((t: { function: { name: string } }) => t.function.name)
-    expect(toolNames).toEqual(['listar_alternativas', 'trocar_exercicio'])
+    expect(toolNames).toEqual([
+      'listar_alternativas',
+      'trocar_exercicio',
+      'buscar_exercicios',
+      'refazer_treino_do_dia',
+    ])
   })
 
   it('calls listar_alternativas, feeds the result back, and returns the final text', async () => {
@@ -153,6 +160,122 @@ describe('chatWithCoach', () => {
     expect(result.swapped).toBeNull()
   })
 
+  it('reports the rebuilt day when refazer_treino_do_dia succeeds', async () => {
+    const searchExercises = vi
+      .fn()
+      .mockResolvedValue([{ id: 'ex-1', name: 'Stiff', target: 'hamstrings', mechanic: 'composto' }])
+    const rebuildDay = vi.fn().mockResolvedValue({
+      dayLabel: 'Posterior e Glúteos',
+      exercises: [
+        {
+          id: 'wde-new',
+          exerciseId: 'ex-1',
+          name: 'Stiff',
+          targetSets: 4,
+          targetReps: 8,
+          targetRir: '1-2',
+        },
+      ],
+    })
+
+    mockCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call-1',
+                  type: 'function',
+                  function: {
+                    name: 'buscar_exercicios',
+                    arguments: JSON.stringify({ grupos_musculares: ['hamstrings'] }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call-2',
+                  type: 'function',
+                  function: {
+                    name: 'refazer_treino_do_dia',
+                    arguments: JSON.stringify({
+                      exercicio_ids: ['ex-1'],
+                      titulo_do_dia: 'Posterior e Glúteos',
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: 'Montei um treino só de posterior.', tool_calls: undefined } }],
+      })
+
+    const result = await chatWithCoach(
+      [{ role: 'user', content: 'hoje eu quero só posterior' }],
+      null,
+      makeTools({ searchExercises, rebuildDay })
+    )
+
+    expect(searchExercises).toHaveBeenCalledWith({ targets: ['hamstrings'], nameQuery: undefined })
+    expect(rebuildDay).toHaveBeenCalledWith({
+      exerciseIds: ['ex-1'],
+      dayLabel: 'Posterior e Glúteos',
+    })
+    expect(result.rebuilt?.dayLabel).toBe('Posterior e Glúteos')
+    expect(result.rebuilt?.exercises).toHaveLength(1)
+    expect(result.content).toBe('Montei um treino só de posterior.')
+  })
+
+  it('does not report a rebuild when refazer_treino_do_dia is refused', async () => {
+    const rebuildDay = vi.fn().mockResolvedValue({ error: 'Esse treino já foi concluído' })
+
+    mockCreate
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call-1',
+                  type: 'function',
+                  function: {
+                    name: 'refazer_treino_do_dia',
+                    arguments: JSON.stringify({ exercicio_ids: ['ex-1'], titulo_do_dia: 'Posterior' }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: 'Esse treino já foi feito, não dá pra mudar.', tool_calls: undefined } }],
+      })
+
+    const result = await chatWithCoach(
+      [{ role: 'user', content: 'muda o treino' }],
+      null,
+      makeTools({ rebuildDay })
+    )
+
+    expect(result.rebuilt).toBeNull()
+  })
+
   it('includes the day context with exercise ids in the system prompt', async () => {
     mockCreate.mockResolvedValue({ choices: [{ message: { content: 'Oi', tool_calls: undefined } }] })
 
@@ -160,6 +283,7 @@ describe('chatWithCoach', () => {
       goal: 'hipertrofia',
       level: 'intermediario',
       dayLabel: 'Peito, Costas e Ombros',
+      exercisesPerDay: 6,
       exercises: [{ workoutDayExerciseId: 'wde-1', name: 'Supino reto', targetSets: 4, targetReps: 10, targetRir: '1-2' }],
     }, makeTools())
 
@@ -167,6 +291,10 @@ describe('chatWithCoach', () => {
     expect(systemMessage).toContain('wde-1')
     expect(systemMessage).toContain('Supino reto')
     expect(systemMessage).toContain('Nunca use markdown')
+    // o vocabulário de grupos musculares precisa chegar ao prompt, senão a IA
+    // chuta valores de `target` que não existem no banco
+    expect(systemMessage).toContain('hamstrings (posterior de coxa)')
+    expect(systemMessage).toContain('6 exercícios por dia')
   })
 
   it('throws when OPENAI_API_KEY is missing', async () => {

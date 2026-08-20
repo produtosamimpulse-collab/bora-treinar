@@ -19,8 +19,8 @@ const EXCLUDED_EQUIPMENT = ['assisted', 'assisted (towel)']
 // aparecia primeiro nas linhas retornadas. Reordena os candidatos em
 // rodízio por `target`, garantindo que nenhum grupo monopolize as vagas do
 // dia antes dos outros grupos terem chance.
-function interleaveByTarget(candidates: CandidateExercise[]): CandidateExercise[] {
-  const byTarget = new Map<string, CandidateExercise[]>()
+export function interleaveByTarget<T extends { target: string }>(candidates: T[]): T[] {
+  const byTarget = new Map<string, T[]>()
   for (const candidate of candidates) {
     const group = byTarget.get(candidate.target) ?? []
     group.push(candidate)
@@ -28,7 +28,7 @@ function interleaveByTarget(candidates: CandidateExercise[]): CandidateExercise[
   }
 
   const groups = [...byTarget.values()]
-  const result: CandidateExercise[] = []
+  const result: T[] = []
   let round = 0
 
   while (result.length < candidates.length) {

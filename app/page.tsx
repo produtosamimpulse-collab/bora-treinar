@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getAuthenticatedUserId } from '@/lib/supabase/session'
 
@@ -41,21 +42,21 @@ export default async function Home() {
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
           {hasPlan ? (
-            <a
+            <Link
               href="/plano"
               className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black transition-transform hover:scale-105"
             >
               Ver meu plano
               <span aria-hidden>→</span>
-            </a>
+            </Link>
           ) : (
-            <a
+            <Link
               href="/onboarding"
               className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black transition-transform hover:scale-105"
             >
               Começar meu plano
               <span aria-hidden>→</span>
-            </a>
+            </Link>
           )}
         </div>
       </div>

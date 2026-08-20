@@ -6,12 +6,20 @@ const mockGetSwapOptions = vi.hoisted(() => vi.fn())
 const mockApplySwap = vi.hoisted(() => vi.fn())
 const mockProfileMaybeSingle = vi.hoisted(() => vi.fn())
 const mockDayMaybeSingle = vi.hoisted(() => vi.fn())
+const mockSearchExercises = vi.hoisted(() => vi.fn())
+const mockRebuildDay = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/supabase/session', () => ({ getAuthenticatedUserId: mockGetAuthenticatedUserId }))
 vi.mock('@/lib/openai/coach-chat', () => ({ chatWithCoach: mockChatWithCoach }))
 vi.mock('@/lib/plan-engine/exercise-swap', () => ({
   getSwapOptions: mockGetSwapOptions,
   applySwap: mockApplySwap,
+}))
+vi.mock('@/lib/plan-engine/rebuild-day', () => ({
+  searchExercises: mockSearchExercises,
+  rebuildDay: mockRebuildDay,
+  AVAILABLE_TARGETS: ['hamstrings', 'glutes'],
+  TARGET_LABELS_PT: { hamstrings: 'posterior de coxa', glutes: 'glúteos' },
 }))
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: () => ({
@@ -44,6 +52,8 @@ describe('POST /api/coach-chat', () => {
     mockDayMaybeSingle.mockReset()
     mockGetSwapOptions.mockReset()
     mockApplySwap.mockReset()
+    mockSearchExercises.mockReset()
+    mockRebuildDay.mockReset()
   })
 
   it('returns 401 without a session', async () => {
@@ -120,6 +130,7 @@ describe('POST /api/coach-chat', () => {
       goal: 'hipertrofia',
       level: 'intermediario',
       dayLabel: 'Peito, Costas e Ombros',
+      exercisesPerDay: 6,
       exercises: [{ workoutDayExerciseId: 'wde-1', name: 'Supino Reto', targetSets: 4, targetReps: 10, targetRir: '2-3' }],
     })
   })
@@ -134,5 +145,21 @@ describe('POST /api/coach-chat', () => {
     await tools.listAlternatives('wde-1')
 
     expect(mockGetSwapOptions).toHaveBeenCalledWith(expect.anything(), 'wde-1', 'user-1')
+  })
+
+  it('pins the rebuild tool to the requested day and the authenticated user', async () => {
+    mockProfileMaybeSingle.mockResolvedValue({ data: null, error: null })
+    mockRebuildDay.mockResolvedValue({ dayLabel: 'Posterior', exercises: [] })
+
+    await POST(makeRequest([{ role: 'user', content: 'quero só posterior' }], 'day-42'))
+
+    const [, , tools] = mockChatWithCoach.mock.calls[0]
+    await tools.rebuildDay({ exerciseIds: ['ex-1'], dayLabel: 'Posterior' })
+
+    // o dia e o dono vêm da requisição autenticada, nunca do que a IA mandar
+    expect(mockRebuildDay).toHaveBeenCalledWith(expect.anything(), 'day-42', 'user-1', {
+      exerciseIds: ['ex-1'],
+      dayLabel: 'Posterior',
+    })
   })
 })

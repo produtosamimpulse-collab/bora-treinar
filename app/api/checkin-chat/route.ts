@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { getAuthenticatedUserId } from '@/lib/supabase/session'
+import { requireUserId } from '@/lib/supabase/require-user'
 import { submitMonthlyCheckin } from '@/lib/plan-engine/checkin'
 import { chatWithCheckin, type CheckinContext } from '@/lib/openai/checkin-chat'
 import type { ChatMessage } from '@/lib/openai/client'
@@ -36,10 +36,10 @@ async function buildCheckinContext(
 }
 
 export async function POST(request: Request) {
-  const userId = await getAuthenticatedUserId()
+  const userId = await requireUserId()
 
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (userId instanceof NextResponse) {
+    return userId
   }
 
   const { messages, trainingPlanId } = (await request.json()) as {

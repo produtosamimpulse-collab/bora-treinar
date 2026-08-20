@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getAuthenticatedUserId } from '@/lib/supabase/session'
 import { translateDayLabel } from '@/lib/plan-engine/label-i18n'
@@ -69,9 +70,9 @@ export default async function PlanoPage({
       return (
         <main className="min-h-dvh bg-background p-6 text-foreground">
           <p>Você ainda não tem um plano.</p>
-          <a href="/onboarding" className="mt-4 inline-block text-brand text-outline underline underline-offset-4">
+          <Link href="/onboarding" className="mt-4 inline-block text-brand text-outline underline underline-offset-4">
             Começar meu plano
-          </a>
+          </Link>
         </main>
       )
     }
@@ -164,12 +165,12 @@ export default async function PlanoPage({
             Seu <span className="text-brand text-outline">plano</span>
           </h1>
         </div>
-        <a
+        <Link
           href="/progresso"
           className="mt-1 shrink-0 text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
         >
           Progresso
-        </a>
+        </Link>
       </header>
 
       {needsCheckin && (
@@ -180,12 +181,12 @@ export default async function PlanoPage({
           <p className="mt-2 text-sm text-foreground/70">
             Antes de começar o próximo mês, vamos fazer sua avaliação mensal com o personal.
           </p>
-          <a
+          <Link
             href={`/checkin?planId=${id}`}
             className="mt-4 inline-block min-h-11 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black"
           >
             Fazer avaliação mensal
-          </a>
+          </Link>
         </div>
       )}
 

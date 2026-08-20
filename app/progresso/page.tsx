@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getAuthenticatedUserId } from '@/lib/supabase/session'
 
@@ -138,12 +139,12 @@ export default async function ProgressoPage() {
   return (
     <main className="min-h-dvh bg-background px-6 py-10 text-foreground sm:px-10">
       <header className="mb-10">
-        <a
+        <Link
           href="/plano"
           className="text-xs text-foreground/60 underline underline-offset-4 hover:text-foreground"
         >
           ← Voltar pro plano
-        </a>
+        </Link>
         <span className="mb-3 mt-4 inline-flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-foreground/60">
           <span className="h-1.5 w-1.5 rounded-full bg-brand" />
           Histórico

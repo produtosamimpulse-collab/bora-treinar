@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Seu personal trainer com IA',
     start_url: '/plano',
     display: 'standalone',
-    background_color: '#0a0a0a',
+    background_color: '#ffffff',
     theme_color: '#c8ff00',
     icons: [
       { src: '/icon-192.jpg', sizes: '192x192', type: 'image/jpeg' },

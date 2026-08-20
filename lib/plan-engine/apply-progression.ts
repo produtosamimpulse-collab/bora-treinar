@@ -74,11 +74,15 @@ export async function applyWeek1Progression(
           continue
         }
 
+        // Casa também por exercise_id: depois que o aluno refaz um dia pelo
+        // chat, o slot de mesmo order_index nas semanas seguintes pode ser
+        // outro exercício - e carga de agachamento não vale pra stiff.
         const { data: futureExercise } = await supabase
           .from('workout_day_exercise')
           .select('id')
           .eq('workout_day_id', futureDay.id)
           .eq('order_index', exercise.order_index)
+          .eq('exercise_id', exercise.exercise_id)
           .maybeSingle()
 
         if (!futureExercise) {
