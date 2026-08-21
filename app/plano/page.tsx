@@ -5,6 +5,7 @@ import { getAuthenticatedUserId } from '@/lib/supabase/session'
 import { translateDayLabel } from '@/lib/plan-engine/label-i18n'
 import { determineCurrentWeek } from '@/lib/plan-engine/week-progress'
 import PlanoInterativo from './PlanoInterativo'
+import PlanoCoachPanel from './PlanoCoachPanel'
 
 type RawDay = {
   id: string
@@ -189,6 +190,8 @@ export default async function PlanoPage({
           </Link>
         </div>
       )}
+
+      <PlanoCoachPanel trainingPlanId={id} />
 
       <PlanoInterativo days={formattedDays} initialCompletedDayIds={completedDayIds} />
     </main>

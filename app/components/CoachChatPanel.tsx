@@ -8,20 +8,22 @@ export default function CoachChatPanel({
   onInputChange,
   onSend,
   loading,
+  emptyHint,
 }: {
   messages: CoachMessage[]
   input: string
   onInputChange: (value: string) => void
   onSend: () => void
   loading: boolean
+  emptyHint?: string
 }) {
   return (
     <div className="mt-3 rounded-xl border border-border-subtle bg-background p-3">
       <div className="max-h-64 space-y-2 overflow-y-auto">
         {messages.length === 0 && (
           <p className="text-xs text-foreground/60">
-            Pergunte sobre algum exercício, relate uma dor, peça pra trocar um exercício, ou
-            peça outro treino pra hoje (ex: &quot;hoje eu quero só posterior&quot;).
+            {emptyHint ??
+              'Pergunte sobre algum exercício, relate uma dor, peça pra trocar um exercício, ou peça outro treino pra hoje (ex: "hoje eu quero só posterior").'}
           </p>
         )}
         {messages.map((message, index) => (
