@@ -1,54 +1,35 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { searchExercises, rebuildDay, AVAILABLE_TARGETS, TARGET_LABELS_PT } from './rebuild-day'
 
-type ExerciseRow = {
-  id: string
-  name: string
-  name_pt: string | null
-  target: string
-  mechanic: string | null
-  is_cardio?: boolean
-}
+const mockLoadCatalogPool = vi.hoisted(() => vi.fn())
+vi.mock('./catalog-source', () => ({ loadCatalogPool: mockLoadCatalogPool }))
 
-type Recorded = {
-  targets: string[] | null
-  orFilter: string | null
-  insertedRows: Record<string, unknown>[] | null
-  deletedDayId: string | null
-  labelUpdate: string | null
-}
+import { searchExercises, rebuildDay } from './rebuild-day'
+
+// Amostra real do banco, incluindo o lixo que motivou o catálogo curado:
+// agachamento ajoelhado e lunge no degrau apareciam num dia de quadríceps.
+const POOL = [
+  { id: 'ex-squat', name: 'barbell full squat', namePt: 'Agachamento com barra', equipment: 'barbell' },
+  { id: 'ex-knees', name: 'barbell squat (on knees)', namePt: 'Agachamento ajoelhado', equipment: 'barbell' },
+  { id: 'ex-stepup', name: 'dumbbell step-up lunge', namePt: 'Afundo no degrau', equipment: 'dumbbell' },
+  { id: 'ex-legpress', name: 'sled 45° leg press', namePt: 'Leg press 45 graus', equipment: 'sled machine' },
+  { id: 'ex-ext', name: 'lever leg extension', namePt: 'Cadeira extensora', equipment: 'leverage machine' },
+  { id: 'ex-rdl', name: 'barbell romanian deadlift', namePt: 'Terra romeno', equipment: 'barbell' },
+  { id: 'ex-curl', name: 'lever lying leg curl', namePt: 'Mesa flexora', equipment: 'leverage machine' },
+  { id: 'ex-calf', name: 'lever standing calf raise', namePt: 'Panturrilha em pé', equipment: 'leverage machine' },
+  { id: 'ex-rot', name: 'cable standing shoulder external rotation', namePt: 'Rotação externa', equipment: 'cable' },
+  { id: 'ex-bench', name: 'barbell bench press', namePt: 'Supino reto', equipment: 'barbell' },
+]
 
 function makeSupabaseMock(options: {
   dayRow?: unknown
   profileRow?: unknown
-  searchResult?: ExerciseRow[]
-  chosenResult?: ExerciseRow[]
+  chosenRows?: Array<{ id: string; name: string; name_pt: string | null }>
 }) {
-  const recorded: Recorded = {
-    targets: null,
-    orFilter: null,
-    insertedRows: null,
-    deletedDayId: null,
-    labelUpdate: null,
-  }
-
-  const exerciseQuery = () => {
-    const builder = {
-      eq: () => builder,
-      not: () => builder,
-      in: (_column: string, values: string[]) => {
-        recorded.targets = values
-        return builder
-      },
-      or: (filter: string) => {
-        recorded.orFilter = filter
-        return builder
-      },
-      then: (resolve: (value: { data: ExerciseRow[]; error: null }) => unknown) =>
-        resolve({ data: options.searchResult ?? options.chosenResult ?? [], error: null }),
-    }
-    return builder
+  const recorded = {
+    insertedRows: null as Record<string, unknown>[] | null,
+    deletedDayId: null as string | null,
+    labelUpdate: null as string | null,
   }
 
   const from = vi.fn((table: string) => {
@@ -98,7 +79,13 @@ function makeSupabaseMock(options: {
     }
 
     // table === 'exercise'
-    return { select: exerciseQuery }
+    const builder = {
+      select: () => builder,
+      in: () => builder,
+      eq: () => builder,
+      then: (resolve: (v: unknown) => unknown) => resolve({ data: options.chosenRows ?? [], error: null }),
+    }
+    return builder
   })
 
   return { supabase: { from } as unknown as SupabaseClient, recorded }
@@ -115,72 +102,78 @@ function makeDayRow(overrides?: { ownerUserId?: string; completed?: boolean; wee
 }
 
 describe('searchExercises', () => {
-  it('returns nothing when neither a target nor a name was given', async () => {
-    const { supabase } = makeSupabaseMock({ searchResult: [] })
-
-    expect(await searchExercises(supabase, {})).toEqual([])
+  beforeEach(() => {
+    mockLoadCatalogPool.mockReset()
+    mockLoadCatalogPool.mockResolvedValue(POOL)
   })
 
-  it('drops muscle groups that do not exist in the catalog vocabulary', async () => {
-    const { supabase, recorded } = makeSupabaseMock({ searchResult: [] })
-
-    await searchExercises(supabase, { targets: ['hamstrings', 'posterior', 'gluteos'] })
-
-    expect(recorded.targets).toEqual(['hamstrings'])
+  it('returns nothing when no criteria was given', async () => {
+    expect(await searchExercises({} as SupabaseClient, {})).toEqual([])
+    expect(mockLoadCatalogPool).not.toHaveBeenCalled()
   })
 
-  it('strips PostgREST syntax out of the name search so the filter cannot be broken', async () => {
-    const { supabase, recorded } = makeSupabaseMock({ searchResult: [] })
+  it('never offers the odd variations that made the user complain', async () => {
+    const result = await searchExercises({} as SupabaseClient, { groups: ['quadriceps'] })
+    const ids = result.map((option) => option.id)
 
-    await searchExercises(supabase, { nameQuery: 'stiff,name.eq.x)' })
-
-    expect(recorded.orFilter).toBe('name.ilike.%stiff name eq x%,name_pt.ilike.%stiff name eq x%')
+    expect(ids).not.toContain('ex-knees')
+    expect(ids).not.toContain('ex-stepup')
   })
 
-  it('puts compound movements first and prefers the translated name', async () => {
-    const { supabase } = makeSupabaseMock({
-      searchResult: [
-        { id: 'a', name: 'lever seated leg curl', name_pt: 'Cadeira flexora', target: 'hamstrings', mechanic: 'isolado' },
-        { id: 'b', name: 'barbell romanian deadlift', name_pt: null, target: 'hamstrings', mechanic: 'composto' },
-      ],
-    })
+  it('offers the classic gym movements for a muscle group, named in portuguese', async () => {
+    const result = await searchExercises({} as SupabaseClient, { groups: ['quadriceps'] })
 
-    const result = await searchExercises(supabase, { targets: ['hamstrings'] })
-
-    expect(result.map((exercise) => exercise.id)).toEqual(['b', 'a'])
-    expect(result[1].name).toBe('Cadeira flexora')
+    expect(result.map((option) => option.name)).toEqual(
+      expect.arrayContaining(['Agachamento livre', 'Leg press 45°', 'Cadeira extensora'])
+    )
+    expect(result.find((option) => option.name === 'Leg press 45°')?.id).toBe('ex-legpress')
   })
 
-  it('interleaves muscle groups so one group cannot fill the whole list', async () => {
-    const glutes: ExerciseRow[] = Array.from({ length: 6 }, (_, index) => ({
-      id: `g${index}`,
-      name: `glute ${index}`,
-      name_pt: null,
-      target: 'glutes',
-      mechanic: 'isolado',
-    }))
-    const { supabase } = makeSupabaseMock({
-      searchResult: [
-        ...glutes,
-        { id: 'h1', name: 'leg curl', name_pt: null, target: 'hamstrings', mechanic: 'isolado' },
-      ],
-    })
+  it('ignores muscle groups that are not part of the catalog vocabulary', async () => {
+    expect(await searchExercises({} as SupabaseClient, { groups: ['hamstrings', 'inventado'] })).toEqual([])
+  })
 
-    const result = await searchExercises(supabase, { targets: ['glutes', 'hamstrings'] })
+  it('puts compound movements before isolation ones', async () => {
+    const result = await searchExercises({} as SupabaseClient, { groups: ['quadriceps'] })
 
-    expect(result.slice(0, 2).map((exercise) => exercise.target)).toEqual(['glutes', 'hamstrings'])
+    expect(result[0].mechanic).toBe('composto')
+    expect(result[result.length - 1].mechanic).toBe('isolado')
+  })
+
+  it('alternates between groups so one group cannot fill the whole list', async () => {
+    const result = await searchExercises({} as SupabaseClient, { groups: ['quadriceps', 'posterior'] })
+
+    expect(new Set(result.slice(0, 2).map((option) => option.group)).size).toBe(2)
+  })
+
+  it('filters by name, matching both the movement and the real exercise', async () => {
+    const result = await searchExercises({} as SupabaseClient, { nameQuery: 'leg press' })
+
+    expect(result.map((option) => option.name)).toEqual(['Leg press 45°'])
+  })
+
+  it('selects by beach tennis quality instead of muscle group', async () => {
+    const result = await searchExercises({} as SupabaseClient, { beach: ['ombro_estavel'] })
+
+    expect(result.map((option) => option.name)).toContain('Rotação externa de ombro')
+    expect(result.every((option) => option.group === 'ombro')).toBe(true)
+  })
+
+  it('ignores beach qualities that do not exist', async () => {
+    expect(await searchExercises({} as SupabaseClient, { beach: ['saque_perfeito'] })).toEqual([])
   })
 })
 
 describe('rebuildDay', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    mockLoadCatalogPool.mockReset()
+    mockLoadCatalogPool.mockResolvedValue(POOL)
   })
 
   it('refuses a day that belongs to someone else', async () => {
     const { supabase } = makeSupabaseMock({ dayRow: makeDayRow({ ownerUserId: 'outro' }) })
 
-    expect(await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-1'] })).toEqual({
+    expect(await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-squat'] })).toEqual({
       error: 'Treino não encontrado',
     })
   })
@@ -188,7 +181,7 @@ describe('rebuildDay', () => {
   it('refuses a day that was already completed', async () => {
     const { supabase, recorded } = makeSupabaseMock({ dayRow: makeDayRow({ completed: true }) })
 
-    const result = await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-1'] })
+    const result = await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-squat'] })
 
     expect('error' in result && result.error).toContain('já foi concluído')
     expect(recorded.deletedDayId).toBeNull()
@@ -200,55 +193,52 @@ describe('rebuildDay', () => {
     expect(await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: [] })).toEqual({
       error: 'Nenhum exercício informado',
     })
-
-    const tooMany = Array.from({ length: 11 }, (_, index) => `ex-${index}`)
-    expect(await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: tooMany })).toEqual({
-      error: 'Um treino pode ter no máximo 10 exercícios',
-    })
+    expect(
+      await rebuildDay(supabase, 'day-1', 'user-1', {
+        exerciseIds: Array.from({ length: 11 }, (_, i) => `ex-${i}`),
+      })
+    ).toEqual({ error: 'Um treino pode ter no máximo 10 exercícios' })
   })
 
-  it('refuses ids that are not in the curated catalog', async () => {
+  it('refuses an exercise that is not a traditional catalog movement', async () => {
     const { supabase, recorded } = makeSupabaseMock({
       dayRow: makeDayRow(),
       profileRow: { goal: 'hipertrofia', level: 'intermediario' },
-      chosenResult: [{ id: 'ex-1', name: 'Stiff', name_pt: null, target: 'hamstrings', mechanic: 'composto' }],
+      chosenRows: [{ id: 'ex-knees', name: 'barbell squat (on knees)', name_pt: 'Agachamento ajoelhado' }],
     })
 
-    const result = await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-1', 'ex-inventado'] })
+    const result = await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-knees'] })
 
-    expect('error' in result && result.error).toContain('não existe no catálogo')
+    expect('error' in result && result.error).toContain('não é um exercício tradicional')
     expect(recorded.deletedDayId).toBeNull()
   })
 
-  it('replaces the day, keeping sets, reps and RIR from the plan engine', async () => {
+  it('replaces the day, naming exercises by movement and keeping the plan prescription', async () => {
     const { supabase, recorded } = makeSupabaseMock({
       dayRow: makeDayRow(),
       profileRow: { goal: 'hipertrofia', level: 'intermediario' },
-      chosenResult: [
-        { id: 'ex-1', name: 'seated leg curl', name_pt: 'Cadeira flexora', target: 'hamstrings', mechanic: 'isolado' },
-        { id: 'ex-2', name: 'romanian deadlift', name_pt: 'Terra romeno', target: 'hamstrings', mechanic: 'composto' },
+      chosenRows: [
+        { id: 'ex-ext', name: 'lever leg extension', name_pt: 'Cadeira extensora' },
+        { id: 'ex-squat', name: 'barbell full squat', name_pt: 'Agachamento com barra' },
       ],
     })
 
     const result = await rebuildDay(supabase, 'day-1', 'user-1', {
-      exerciseIds: ['ex-1', 'ex-2'],
-      dayLabel: 'Posterior e Glúteos',
+      exerciseIds: ['ex-ext', 'ex-squat'],
+      dayLabel: 'Quadríceps',
     })
 
     expect(recorded.deletedDayId).toBe('day-1')
-    expect(recorded.labelUpdate).toBe('Posterior e Glúteos')
-    // composto primeiro, isolado depois
-    expect(recorded.insertedRows?.map((row) => row.exercise_id)).toEqual(['ex-2', 'ex-1'])
+    expect(recorded.labelUpdate).toBe('Quadríceps')
+    // composto antes de isolado, independente da ordem que a IA mandou
+    expect(recorded.insertedRows?.map((row) => row.exercise_id)).toEqual(['ex-squat', 'ex-ext'])
     expect(recorded.insertedRows?.every((row) => row.target_sets === 4)).toBe(true)
     expect(recorded.insertedRows?.every((row) => row.target_reps === 8)).toBe(true)
     expect(recorded.insertedRows?.every((row) => row.target_rir === '1-2')).toBe(true)
-    // carga vira null: a progressão guardada ali era do exercício antigo
     expect(recorded.insertedRows?.every((row) => row.target_load_kg === null)).toBe(true)
-
-    expect('exercises' in result && result.dayLabel).toBe('Posterior e Glúteos')
-    expect('exercises' in result && result.exercises.map((exercise) => exercise.name)).toEqual([
-      'Terra romeno',
-      'Cadeira flexora',
+    expect('exercises' in result && result.exercises.map((e) => e.name)).toEqual([
+      'Agachamento livre',
+      'Cadeira extensora',
     ])
   })
 
@@ -256,10 +246,10 @@ describe('rebuildDay', () => {
     const { supabase, recorded } = makeSupabaseMock({
       dayRow: makeDayRow({ weekType: 'deload' }),
       profileRow: { goal: 'hipertrofia', level: 'intermediario' },
-      chosenResult: [{ id: 'ex-1', name: 'Stiff', name_pt: null, target: 'hamstrings', mechanic: 'composto' }],
+      chosenRows: [{ id: 'ex-squat', name: 'barbell full squat', name_pt: null }],
     })
 
-    await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-1'] })
+    await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-squat'] })
 
     expect(recorded.insertedRows?.[0].target_sets).toBe(2)
   })
@@ -268,10 +258,10 @@ describe('rebuildDay', () => {
     const { supabase, recorded } = makeSupabaseMock({
       dayRow: makeDayRow(),
       profileRow: { goal: 'hipertrofia', level: 'intermediario' },
-      chosenResult: [{ id: 'ex-1', name: 'Stiff', name_pt: null, target: 'hamstrings', mechanic: 'composto' }],
+      chosenRows: [{ id: 'ex-squat', name: 'barbell full squat', name_pt: null }],
     })
 
-    const result = await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-1'] })
+    const result = await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-squat'] })
 
     expect(recorded.labelUpdate).toBeNull()
     expect('dayLabel' in result && result.dayLabel).toBe('Pernas e Glúteos')
@@ -281,19 +271,11 @@ describe('rebuildDay', () => {
     const { supabase, recorded } = makeSupabaseMock({
       dayRow: makeDayRow(),
       profileRow: { goal: 'hipertrofia', level: 'intermediario' },
-      chosenResult: [{ id: 'ex-1', name: 'Stiff', name_pt: null, target: 'hamstrings', mechanic: 'composto' }],
+      chosenRows: [{ id: 'ex-squat', name: 'barbell full squat', name_pt: null }],
     })
 
-    await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-1', 'ex-1'] })
+    await rebuildDay(supabase, 'day-1', 'user-1', { exerciseIds: ['ex-squat', 'ex-squat'] })
 
     expect(recorded.insertedRows).toHaveLength(1)
-  })
-})
-
-describe('vocabulário de grupos musculares', () => {
-  it('has a portuguese label for every target the tools accept', () => {
-    for (const target of AVAILABLE_TARGETS) {
-      expect(TARGET_LABELS_PT[target]).toBeTruthy()
-    }
   })
 })

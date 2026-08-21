@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { MUSCLE_GROUPS } from './movement-catalog'
 import { chooseSplit } from './split'
 
 describe('chooseSplit', () => {
@@ -71,22 +72,14 @@ describe('chooseSplit', () => {
     expect(() => chooseSplit(8)).toThrow()
   })
 
-  // Regressão: os targets precisam bater com o vocabulário real da coluna
-  // `exercise.target` (ex: "pectorals", "abs"), não com `muscle_group`
-  // (ex: "chest"). Confirmado consultando os 1394 exercícios sincronizados.
-  const VALID_EXERCISEDB_TARGETS = new Set([
-    'abductors', 'abs', 'adductors', 'biceps', 'calves',
-    'cardiovascular system', 'delts', 'forearms', 'glutes', 'hamstrings',
-    'lats', 'levator scapulae', 'pectorals', 'quads',
-    'serratus anterior', 'spine', 'traps', 'triceps', 'upper back',
-  ])
-
-  it('uses only real exercise.target vocabulary in every split', () => {
-    for (const daysPerWeek of [2, 3, 4, 5, 6, 7]) {
-      const { days } = chooseSplit(daysPerWeek)
-      for (const day of days) {
-        for (const target of day.targets) {
-          expect(VALID_EXERCISEDB_TARGETS.has(target)).toBe(true)
+  // Regressão: o split agora fala o vocabulário do catálogo de movimentos
+  // (peito, quadriceps, posterior...), não o `target` da ExerciseDB, que
+  // colocava agachamento, hack e leg press todos como "glutes".
+  it('uses only muscle groups that exist in the movement catalog', () => {
+    for (const days of [1, 2, 3, 4, 5, 6, 7]) {
+      for (const day of chooseSplit(days).days) {
+        for (const group of day.groups) {
+          expect(MUSCLE_GROUPS).toContain(group)
         }
       }
     }

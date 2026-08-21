@@ -1,18 +1,18 @@
+import type { MuscleGroup } from './movement-catalog'
+
 export type SplitType = 'full_body' | 'upper_lower'
 
 export type SplitDay = {
   label: string
-  targets: string[]
+  groups: MuscleGroup[]
 }
 
-// Valores reais da coluna `exercise.target` (vocabulário da ExerciseDB,
-// confirmado consultando os 1394 exercícios sincronizados) — não são os
-// mesmos valores de `exercise.muscle_group` (que vem de `bodyPart`, ex:
-// "chest", "back"). Ver docs/superpowers/plans/2026-07-13-melhorias-plano-treino.md
-// para o contexto da correção.
-const FULL_BODY_TARGETS = ['pectorals', 'lats', 'quads', 'delts', 'abs', 'glutes', 'hamstrings']
-const UPPER_TARGETS = ['pectorals', 'lats', 'upper back', 'delts', 'triceps', 'biceps', 'traps']
-const LOWER_TARGETS = ['quads', 'hamstrings', 'glutes', 'calves', 'abs', 'adductors']
+// Grupos do catálogo de movimentos (movement-catalog.ts), não os `target` da
+// ExerciseDB — lá agachamento livre, hack e leg press estão todos como
+// "glutes", o que deixava um dia de perna sem os movimentos principais.
+const FULL_BODY_GROUPS: MuscleGroup[] = ['peito', 'costas', 'quadriceps', 'posterior', 'ombro', 'core']
+const UPPER_GROUPS: MuscleGroup[] = ['peito', 'costas', 'ombro', 'triceps', 'biceps']
+const LOWER_GROUPS: MuscleGroup[] = ['quadriceps', 'posterior', 'gluteo', 'panturrilha', 'core']
 
 export function chooseSplit(daysPerWeek: number): { type: SplitType; days: SplitDay[] } {
   if (daysPerWeek < 1 || daysPerWeek > 7) {
@@ -22,7 +22,7 @@ export function chooseSplit(daysPerWeek: number): { type: SplitType; days: Split
   if (daysPerWeek <= 3) {
     const days: SplitDay[] = Array.from({ length: daysPerWeek }, (_, i) => ({
       label: `Corpo Inteiro ${i + 1}`,
-      targets: FULL_BODY_TARGETS,
+      groups: FULL_BODY_GROUPS,
     }))
     return { type: 'full_body', days }
   }
@@ -33,8 +33,8 @@ export function chooseSplit(daysPerWeek: number): { type: SplitType; days: Split
   // pull contra só 1x legs) e deixa pernas malfeitas.
   const days: SplitDay[] = Array.from({ length: daysPerWeek }, (_, i) =>
     i % 2 === 0
-      ? { label: 'Peito, Costas e Ombros', targets: UPPER_TARGETS }
-      : { label: 'Pernas e Glúteos', targets: LOWER_TARGETS }
+      ? { label: 'Peito, Costas e Ombros', groups: UPPER_GROUPS }
+      : { label: 'Pernas e Glúteos', groups: LOWER_GROUPS }
   )
   return { type: 'upper_lower', days }
 }

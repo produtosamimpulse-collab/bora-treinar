@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { loadCatalogPool } from './catalog-source'
+import { MOVEMENTS, findMovementForName, pickVariation, type MuscleGroup } from './movement-catalog'
 
-const EXCLUDED_EQUIPMENT = ['assisted', 'assisted (towel)']
 const MAX_OPTIONS = 5
 
 export type SwapOption = { id: string; name: string }
@@ -8,7 +9,9 @@ export type SwapOption = { id: string; name: string }
 type OwnedExercise = {
   id: string
   workout_day_id: string
-  target: string
+  exerciseName: string
+  group: MuscleGroup | null
+  movementId: string | null
 }
 
 async function findOwnedExercise(
@@ -19,7 +22,7 @@ async function findOwnedExercise(
   const { data: current, error } = await supabase
     .from('workout_day_exercise')
     .select(
-      'id, workout_day_id, exercise:exercise_id(target), workout_day:workout_day_id(training_plan:training_plan_id(user_id))'
+      'id, workout_day_id, exercise:exercise_id(name), workout_day:workout_day_id(training_plan:training_plan_id(user_id))'
     )
     .eq('id', workoutDayExerciseId)
     .single()
@@ -36,13 +39,24 @@ async function findOwnedExercise(
     return null
   }
 
+  const exerciseName = (current.exercise as unknown as { name: string }).name
+  const movement = findMovementForName(exerciseName)
+
   return {
     id: current.id,
     workout_day_id: current.workout_day_id,
-    target: (current.exercise as unknown as { target: string }).target,
+    exerciseName,
+    group: movement?.group ?? null,
+    movementId: movement?.id ?? null,
   }
 }
 
+/**
+ * Alternativas de troca: outros MOVIMENTOS do mesmo grupo muscular, um por
+ * movimento. Antes isso vinha do `target` da ExerciseDB e devolvia cinco
+ * variações do mesmo aparelho; agora trocar leg press oferece agachamento,
+ * hack e cadeira extensora de verdade.
+ */
 export async function getSwapOptions(
   supabase: SupabaseClient,
   workoutDayExerciseId: string,
@@ -54,49 +68,38 @@ export async function getSwapOptions(
     return null
   }
 
+  if (!current.group) {
+    return []
+  }
+
   const { data: usedRows } = await supabase
     .from('workout_day_exercise')
-    .select('exercise_id')
+    .select('exercise:exercise_id(name)')
     .eq('workout_day_id', current.workout_day_id)
 
-  const usedIds = (usedRows ?? []).map((row) => row.exercise_id)
+  const usedMovementIds = new Set(
+    (usedRows ?? [])
+      .map((row) => findMovementForName((row.exercise as unknown as { name: string }).name)?.id)
+      .filter((id): id is string => id != null)
+  )
 
-  const { data: candidates, error: candidateError } = await supabase
-    .from('exercise')
-    .select('id, name, name_pt, equipment')
-    .eq('target', current.target)
-    .not('id', 'in', `(${usedIds.join(',')})`)
-    .not('equipment', 'in', `(${EXCLUDED_EQUIPMENT.map((e) => `"${e}"`).join(',')})`)
-    .not('name', 'ilike', '%towel%')
+  const pool = await loadCatalogPool(supabase)
+  const options: SwapOption[] = []
 
-  if (candidateError) {
-    throw new Error(candidateError.message)
+  for (const movement of MOVEMENTS) {
+    if (options.length >= MAX_OPTIONS) break
+    if (movement.group !== current.group) continue
+    // nunca oferecer como alternativa o próprio movimento que está no treino
+    if (movement.id === current.movementId) continue
+    if (usedMovementIds.has(movement.id)) continue
+
+    const variation = pickVariation(movement, pool)
+    if (!variation) continue
+
+    options.push({ id: variation.id, name: movement.namePt })
   }
 
-  // Prioriza variedade: no máximo um exercício por tipo de equipamento
-  // primeiro, só repetindo equipamento se faltar opção diferente pra
-  // completar 5 - assim as alternativas realmente usam máquinas diferentes,
-  // não só variações do mesmo aparelho.
-  const seenEquipment = new Set<string>()
-  const diverse: typeof candidates = []
-  const rest: typeof candidates = []
-
-  for (const candidate of candidates ?? []) {
-    const equipment = candidate.equipment ?? ''
-    if (!seenEquipment.has(equipment)) {
-      seenEquipment.add(equipment)
-      diverse.push(candidate)
-    } else {
-      rest.push(candidate)
-    }
-  }
-
-  const options = [...diverse, ...rest].slice(0, MAX_OPTIONS)
-
-  return options.map((option) => ({
-    id: option.id,
-    name: option.name_pt ?? option.name,
-  }))
+  return options
 }
 
 export async function applySwap(
@@ -115,7 +118,6 @@ export async function applySwap(
     .from('exercise')
     .select('id, name, name_pt')
     .eq('id', exerciseId)
-    .eq('target', current.target)
     .maybeSingle()
 
   if (chosenError) {
@@ -123,6 +125,15 @@ export async function applySwap(
   }
 
   if (!chosen) {
+    return { error: 'Invalid replacement exercise' }
+  }
+
+  const movement = findMovementForName(chosen.name as string)
+
+  // A troca continua presa ao mesmo grupo muscular: é o que impede o chat de
+  // transformar um dia de perna em dia de bíceps trocando exercício por
+  // exercício, sem passar pelo refazer_treino_do_dia.
+  if (!movement || (current.group && movement.group !== current.group)) {
     return { error: 'Invalid replacement exercise' }
   }
 
@@ -135,5 +146,5 @@ export async function applySwap(
     throw new Error(updateError.message)
   }
 
-  return chosen
+  return { id: chosen.id as string, name: movement.namePt, name_pt: movement.namePt }
 }

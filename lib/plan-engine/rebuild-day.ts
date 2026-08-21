@@ -1,44 +1,30 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { OnboardingProfile } from '../openai/client'
 import { getVolumeForGoal, getTargetRir, type Level } from './volume-table'
-import { interleaveByTarget } from './weekly-selection'
+import {
+  MOVEMENTS,
+  MUSCLE_GROUPS,
+  BEACH_QUALITIES,
+  pickVariation,
+  findMovementForName,
+  type BeachQuality,
+  type CatalogExercise,
+  type Movement,
+  type MuscleGroup,
+} from './movement-catalog'
+import { loadCatalogPool } from './catalog-source'
 
-const EXCLUDED_EQUIPMENT = ['assisted', 'assisted (towel)']
 const MAX_SEARCH_RESULTS = 24
-const MAX_PER_TARGET = 8
 const MAX_EXERCISES_PER_DAY = 10
 const MAX_DAY_LABEL_LENGTH = 60
 
-// Valores reais da coluna `exercise.target` (vocabulário da ExerciseDB),
-// conferidos direto no banco. É o vocabulário que o treinador do chat pode
-// pedir ao montar um treino sob medida — qualquer outro valor não existe e
-// devolveria uma busca vazia.
-export const AVAILABLE_TARGETS = [
-  'abductors',
-  'abs',
-  'adductors',
-  'biceps',
-  'calves',
-  'delts',
-  'forearms',
-  'glutes',
-  'hamstrings',
-  'lats',
-  'pectorals',
-  'quads',
-  'spine',
-  'traps',
-  'triceps',
-  'upper back',
-] as const
-
-export type AvailableTarget = (typeof AVAILABLE_TARGETS)[number]
-
-export type ExerciseSearchResult = {
+export type CatalogOption = {
   id: string
   name: string
-  target: string
+  variationName: string
+  group: MuscleGroup
   mechanic: string
+  movementId: string
 }
 
 export type RebuiltExercise = {
@@ -57,85 +43,101 @@ export type RebuiltDay = {
 
 export type RebuildError = { error: string }
 
-// `.or()` do PostgREST usa vírgula, parênteses e ponto como sintaxe: um termo
-// de busca vindo da conversa precisa ser limpo antes de entrar no filtro.
-function sanitizeSearchTerm(term: string): string {
-  return term.replace(/[,()".*\\%]/g, ' ').trim().slice(0, 60)
+function toOption(movement: Movement, exercise: CatalogExercise): CatalogOption {
+  return {
+    id: exercise.id,
+    name: movement.namePt,
+    variationName: exercise.namePt ?? exercise.name,
+    group: movement.group,
+    mechanic: movement.mechanic,
+    movementId: movement.id,
+  }
 }
 
-function isCompound(mechanic: string | null): boolean {
-  return mechanic === 'composto'
-}
-
-// Mesma ordem que o motor usa ao montar um dia: composto primeiro, isolado
-// depois — quem exige mais coordenação e carga vem com o aluno descansado.
-function orderCompoundFirst<T extends { mechanic: string | null }>(exercises: T[]): T[] {
-  return [...exercises].sort((a, b) => {
-    if (isCompound(a.mechanic) === isCompound(b.mechanic)) return 0
-    return isCompound(a.mechanic) ? -1 : 1
+function orderCompoundFirst<T extends { mechanic: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const compound = (item: T) => (item.mechanic === 'composto' ? 0 : 1)
+    return compound(a) - compound(b)
   })
+}
+
+// Rodízio entre grupos: pedir "peito e tríceps" não pode devolver a lista
+// inteira de peito antes do primeiro tríceps.
+function interleaveByGroup(options: CatalogOption[]): CatalogOption[] {
+  const byGroup = new Map<string, CatalogOption[]>()
+  for (const option of options) {
+    const group = byGroup.get(option.group) ?? []
+    group.push(option)
+    byGroup.set(option.group, group)
+  }
+
+  const groups = [...byGroup.values()]
+  const result: CatalogOption[] = []
+  let round = 0
+
+  while (result.length < options.length) {
+    let added = false
+    for (const group of groups) {
+      if (round < group.length) {
+        result.push(group[round])
+        added = true
+      }
+    }
+    if (!added) break
+    round += 1
+  }
+
+  return result
 }
 
 /**
- * Busca exercícios do catálogo curado (os que têm `mechanic` preenchido) por
- * grupo muscular, por nome, ou pelos dois. É o que dá ao treinador do chat
- * uma lista real de opções pra montar um treino sob medida, em vez de
- * inventar exercícios que não existem no banco.
+ * Lista os movimentos tradicionais de academia disponíveis, já resolvidos
+ * para um exercício real do banco. É o que o treinador do chat enxerga: uma
+ * opção por movimento ("Leg press 45°"), não doze variações do mesmo aparelho.
  */
 export async function searchExercises(
   supabase: SupabaseClient,
-  criteria: { targets?: string[]; nameQuery?: string }
-): Promise<ExerciseSearchResult[]> {
-  const targets = (criteria.targets ?? []).filter((target) =>
-    (AVAILABLE_TARGETS as readonly string[]).includes(target)
-  )
-  const nameQuery = criteria.nameQuery ? sanitizeSearchTerm(criteria.nameQuery) : ''
+  criteria: { groups?: string[]; nameQuery?: string; beach?: string[] }
+): Promise<CatalogOption[]> {
+  const groups = (criteria.groups ?? []).filter((group) =>
+    (MUSCLE_GROUPS as readonly string[]).includes(group)
+  ) as MuscleGroup[]
+  const beach = (criteria.beach ?? []).filter((quality) =>
+    (BEACH_QUALITIES as readonly string[]).includes(quality)
+  ) as BeachQuality[]
+  const nameQuery = (criteria.nameQuery ?? '').trim().toLowerCase()
 
-  if (targets.length === 0 && !nameQuery) {
+  if (groups.length === 0 && beach.length === 0 && !nameQuery) {
     return []
   }
 
-  let query = supabase
-    .from('exercise')
-    .select('id, name, name_pt, target, mechanic')
-    .eq('is_cardio', false)
-    .not('mechanic', 'is', null)
-    .not('equipment', 'in', `(${EXCLUDED_EQUIPMENT.map((e) => `"${e}"`).join(',')})`)
-    .not('name', 'ilike', '%towel%')
+  const pool = await loadCatalogPool(supabase)
 
-  if (targets.length > 0) {
-    query = query.in('target', targets)
-  }
-
-  if (nameQuery) {
-    query = query.or(`name.ilike.%${nameQuery}%,name_pt.ilike.%${nameQuery}%`)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  const rows = (data ?? []).map((row) => ({
-    id: row.id as string,
-    name: (row.name_pt as string | null) ?? (row.name as string),
-    target: row.target as string,
-    mechanic: row.mechanic as string,
-  }))
-
-  // Sem o rodízio por grupo, pedir "posterior e glúteo" podia devolver 24
-  // exercícios de glúteo e nenhum de posterior — o grupo com mais linhas no
-  // banco monopolizaria a lista que o treinador vê.
-  const byTargetCap = new Map<string, number>()
-  const capped = orderCompoundFirst(rows).filter((row) => {
-    const used = byTargetCap.get(row.target) ?? 0
-    if (used >= MAX_PER_TARGET) return false
-    byTargetCap.set(row.target, used + 1)
+  const selected = MOVEMENTS.filter((movement) => {
+    if (groups.length > 0 && !groups.includes(movement.group)) return false
+    if (beach.length > 0 && !(movement.beach ?? []).some((quality) => beach.includes(quality))) {
+      return false
+    }
     return true
   })
 
-  return interleaveByTarget(capped).slice(0, MAX_SEARCH_RESULTS)
+  const options: CatalogOption[] = []
+
+  for (const movement of selected) {
+    const variation = pickVariation(movement, pool)
+    if (!variation) continue
+
+    const option = toOption(movement, variation)
+
+    if (nameQuery) {
+      const haystack = `${option.name} ${option.variationName} ${variation.name}`.toLowerCase()
+      if (!haystack.includes(nameQuery)) continue
+    }
+
+    options.push(option)
+  }
+
+  return interleaveByGroup(orderCompoundFirst(options)).slice(0, MAX_SEARCH_RESULTS)
 }
 
 type DayRow = {
@@ -227,23 +229,31 @@ export async function rebuildDay(
 
   const { data: chosen, error: chosenError } = await supabase
     .from('exercise')
-    .select('id, name, name_pt, mechanic')
+    .select('id, name, name_pt')
     .in('id', exerciseIds)
     .eq('is_cardio', false)
-    .not('mechanic', 'is', null)
 
   if (chosenError) {
     throw new Error(chosenError.message)
   }
 
-  const found = (chosen ?? []).map((row) => ({
-    id: row.id as string,
-    name: (row.name_pt as string | null) ?? (row.name as string),
-    mechanic: row.mechanic as string,
-  }))
+  // Só entra no treino o que o catálogo de movimentos reconhece como
+  // exercício tradicional de academia. É o que impede o agente de montar um
+  // dia com agachamento ajoelhado ou lunge no degrau.
+  const found: Array<{ id: string; name: string; mechanic: string }> = []
+
+  for (const row of chosen ?? []) {
+    const movement = findMovementForName(row.name as string)
+    if (!movement) continue
+
+    found.push({ id: row.id as string, name: movement.namePt, mechanic: movement.mechanic })
+  }
 
   if (found.length !== exerciseIds.length) {
-    return { error: 'Algum dos exercícios escolhidos não existe no catálogo' }
+    return {
+      error:
+        'Algum dos exercícios escolhidos não é um exercício tradicional do catálogo. Use os IDs que vieram de buscar_exercicios.',
+    }
   }
 
   const volume = getVolumeForGoal(profile.goal as OnboardingProfile['goal'])
@@ -315,26 +325,4 @@ export async function rebuildDay(
     dayLabel: newLabel || day.day_label,
     exercises,
   }
-}
-
-// Nomes em português dos grupos musculares, pra o treinador do chat traduzir
-// o que o aluno fala ("posterior", "glúteo") pro vocabulário da coluna
-// `target` sem precisar adivinhar.
-export const TARGET_LABELS_PT: Record<AvailableTarget, string> = {
-  abductors: 'abdutores',
-  abs: 'abdômen',
-  adductors: 'adutores',
-  biceps: 'bíceps',
-  calves: 'panturrilha',
-  delts: 'ombros',
-  forearms: 'antebraço',
-  glutes: 'glúteos',
-  hamstrings: 'posterior de coxa',
-  lats: 'dorsal (costas)',
-  pectorals: 'peito',
-  quads: 'quadríceps',
-  spine: 'lombar e core',
-  traps: 'trapézio',
-  triceps: 'tríceps',
-  'upper back': 'costas (parte alta)',
 }

@@ -1,10 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
+
+const mockLoadCatalogPool = vi.hoisted(() => vi.fn())
+vi.mock('./catalog-source', () => ({ loadCatalogPool: mockLoadCatalogPool }))
+
 import { getSwapOptions, applySwap } from './exercise-swap'
+
+const POOL = [
+  { id: 'ex-squat', name: 'barbell full squat', namePt: 'Agachamento', equipment: 'barbell' },
+  { id: 'ex-legpress', name: 'sled 45° leg press', namePt: 'Leg press', equipment: 'sled machine' },
+  { id: 'ex-hack', name: 'sled hack squat', namePt: 'Hack', equipment: 'sled machine' },
+  { id: 'ex-ext', name: 'lever leg extension', namePt: 'Cadeira extensora', equipment: 'leverage machine' },
+  { id: 'ex-lunge', name: 'barbell lunge', namePt: 'Afundo', equipment: 'barbell' },
+  { id: 'ex-smith', name: 'smith squat', namePt: 'Agachamento smith', equipment: 'smith machine' },
+  { id: 'ex-curl', name: 'barbell curl', namePt: 'Rosca direta', equipment: 'barbell' },
+]
 
 const mockCurrentSingle = vi.hoisted(() => vi.fn())
 const mockUsedSelect = vi.hoisted(() => vi.fn())
-const mockCandidatesQuery = vi.hoisted(() => vi.fn())
 const mockChosenMaybeSingle = vi.hoisted(() => vi.fn())
 const mockUpdateEq = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }))
 
@@ -13,7 +26,7 @@ function makeSupabaseMock() {
     if (table === 'workout_day_exercise') {
       return {
         select: (columns: string) => {
-          if (columns.includes('exercise:exercise_id')) {
+          if (columns.includes('workout_day:workout_day_id')) {
             return { eq: () => ({ single: mockCurrentSingle }) }
           }
           return { eq: () => mockUsedSelect() }
@@ -21,29 +34,17 @@ function makeSupabaseMock() {
         update: () => ({ eq: mockUpdateEq }),
       }
     }
-    // table === 'exercise'
-    return {
-      select: (columns: string) => {
-        if (columns.includes('equipment')) {
-          return {
-            eq: () => ({
-              not: () => ({ not: () => ({ not: async () => mockCandidatesQuery() }) }),
-            }),
-          }
-        }
-        return { eq: () => ({ eq: () => ({ maybeSingle: mockChosenMaybeSingle }) }) }
-      },
-    }
+    return { select: () => ({ eq: () => ({ maybeSingle: mockChosenMaybeSingle }) }) }
   })
 
   return { from } as unknown as SupabaseClient
 }
 
-function makeCurrentRow(overrides?: { ownerUserId?: string }) {
+function makeCurrentRow(overrides?: { ownerUserId?: string; name?: string }) {
   return {
     id: 'wde-1',
     workout_day_id: 'day-1',
-    exercise: { target: 'pectorals' },
+    exercise: { name: overrides?.name ?? 'sled 45° leg press' },
     workout_day: { training_plan: { user_id: overrides?.ownerUserId ?? 'user-1' } },
   }
 }
@@ -52,34 +53,39 @@ describe('getSwapOptions', () => {
   beforeEach(() => {
     mockCurrentSingle.mockReset()
     mockUsedSelect.mockReset()
-    mockCandidatesQuery.mockReset()
+    mockLoadCatalogPool.mockReset()
+    mockLoadCatalogPool.mockResolvedValue(POOL)
+    mockUsedSelect.mockResolvedValue({ data: [], error: null })
   })
 
   it('returns null when the exercise does not belong to the caller', async () => {
-    mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow({ ownerUserId: 'someone-else' }), error: null })
+    mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow({ ownerUserId: 'outro' }), error: null })
 
-    const result = await getSwapOptions(makeSupabaseMock(), 'wde-1', 'user-1')
-
-    expect(result).toBeNull()
+    expect(await getSwapOptions(makeSupabaseMock(), 'wde-1', 'user-1')).toBeNull()
   })
 
-  it('prefers distinct equipment and caps at 5 options', async () => {
+  it('offers other movements of the same group, not variations of the same machine', async () => {
     mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow(), error: null })
-    mockUsedSelect.mockResolvedValue({ data: [{ exercise_id: 'ex-1' }], error: null })
-    mockCandidatesQuery.mockResolvedValue({
-      data: [
-        { id: 'ex-2', name: 'Barbell Bench Press', name_pt: 'Supino Reto', equipment: 'barbell' },
-        { id: 'ex-3', name: 'Close-Grip Barbell Bench Press', name_pt: 'Supino Fechado', equipment: 'barbell' },
-        { id: 'ex-4', name: 'Dumbbell Bench Press', name_pt: 'Supino com Halteres', equipment: 'dumbbell' },
-        { id: 'ex-5', name: 'Cable Crossover', name_pt: 'Crossover', equipment: 'cable' },
-        { id: 'ex-6', name: 'Machine Chest Press', name_pt: 'Supino na Máquina', equipment: 'leverage machine' },
-      ],
+
+    const options = await getSwapOptions(makeSupabaseMock(), 'wde-1', 'user-1')
+
+    expect(options?.map((option) => option.name)).toEqual(
+      expect.arrayContaining(['Agachamento livre', 'Hack machine', 'Cadeira extensora'])
+    )
+    expect(options?.every((option) => option.name !== 'Leg press 45°')).toBe(true)
+    expect(options?.length).toBeLessThanOrEqual(5)
+  })
+
+  it('does not offer a movement already present in the same day', async () => {
+    mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow(), error: null })
+    mockUsedSelect.mockResolvedValue({
+      data: [{ exercise: { name: 'barbell full squat' } }, { exercise: { name: 'sled 45° leg press' } }],
       error: null,
     })
 
-    const result = await getSwapOptions(makeSupabaseMock(), 'wde-1', 'user-1')
+    const options = await getSwapOptions(makeSupabaseMock(), 'wde-1', 'user-1')
 
-    expect(result?.map((option) => option.id)).toEqual(['ex-2', 'ex-4', 'ex-5', 'ex-6', 'ex-3'])
+    expect(options?.map((option) => option.name)).not.toContain('Agachamento livre')
   })
 })
 
@@ -88,36 +94,44 @@ describe('applySwap', () => {
     mockCurrentSingle.mockReset()
     mockChosenMaybeSingle.mockReset()
     mockUpdateEq.mockClear()
+    mockLoadCatalogPool.mockResolvedValue(POOL)
   })
 
-  it('returns an error object when the exercise does not belong to the caller', async () => {
-    mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow({ ownerUserId: 'someone-else' }), error: null })
-
-    const result = await applySwap(makeSupabaseMock(), 'wde-1', 'ex-2', 'user-1')
-
-    expect(result).toEqual({ error: 'Exercise not found' })
-    expect(mockUpdateEq).not.toHaveBeenCalled()
-  })
-
-  it('rejects a chosen exercise with a different target', async () => {
-    mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow(), error: null })
-    mockChosenMaybeSingle.mockResolvedValue({ data: null, error: null })
-
-    const result = await applySwap(makeSupabaseMock(), 'wde-1', 'ex-wrong-target', 'user-1')
-
-    expect(result).toEqual({ error: 'Invalid replacement exercise' })
-  })
-
-  it('updates the exercise and returns it on success', async () => {
+  it('rejects a replacement from a different muscle group', async () => {
     mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow(), error: null })
     mockChosenMaybeSingle.mockResolvedValue({
-      data: { id: 'ex-2', name: 'Bench Press', name_pt: 'Supino Reto' },
+      data: { id: 'ex-curl', name: 'barbell curl', name_pt: 'Rosca direta' },
       error: null,
     })
 
-    const result = await applySwap(makeSupabaseMock(), 'wde-1', 'ex-2', 'user-1')
+    expect(await applySwap(makeSupabaseMock(), 'wde-1', 'ex-curl', 'user-1')).toEqual({
+      error: 'Invalid replacement exercise',
+    })
+    expect(mockUpdateEq).not.toHaveBeenCalled()
+  })
 
-    expect(mockUpdateEq).toHaveBeenCalledWith('id', 'wde-1')
-    expect(result).toEqual({ id: 'ex-2', name: 'Bench Press', name_pt: 'Supino Reto' })
+  it('rejects an exercise that is outside the curated catalog', async () => {
+    mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow(), error: null })
+    mockChosenMaybeSingle.mockResolvedValue({
+      data: { id: 'ex-weird', name: 'barbell squat (on knees)', name_pt: 'Agachamento ajoelhado' },
+      error: null,
+    })
+
+    expect(await applySwap(makeSupabaseMock(), 'wde-1', 'ex-weird', 'user-1')).toEqual({
+      error: 'Invalid replacement exercise',
+    })
+  })
+
+  it('swaps and returns the movement name on success', async () => {
+    mockCurrentSingle.mockResolvedValue({ data: makeCurrentRow(), error: null })
+    mockChosenMaybeSingle.mockResolvedValue({
+      data: { id: 'ex-hack', name: 'sled hack squat', name_pt: 'Hack' },
+      error: null,
+    })
+
+    const result = await applySwap(makeSupabaseMock(), 'wde-1', 'ex-hack', 'user-1')
+
+    expect(result).toEqual({ id: 'ex-hack', name: 'Hack machine', name_pt: 'Hack machine' })
+    expect(mockUpdateEq).toHaveBeenCalled()
   })
 })

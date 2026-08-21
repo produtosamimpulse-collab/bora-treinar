@@ -163,7 +163,16 @@ describe('chatWithCoach', () => {
   it('reports the rebuilt day when refazer_treino_do_dia succeeds', async () => {
     const searchExercises = vi
       .fn()
-      .mockResolvedValue([{ id: 'ex-1', name: 'Stiff', target: 'hamstrings', mechanic: 'composto' }])
+      .mockResolvedValue([
+        {
+          id: 'ex-1',
+          name: 'Stiff (terra romeno)',
+          variationName: 'barbell romanian deadlift',
+          group: 'posterior',
+          mechanic: 'composto',
+          movementId: 'stiff',
+        },
+      ])
     const rebuildDay = vi.fn().mockResolvedValue({
       dayLabel: 'Posterior e Glúteos',
       exercises: [
@@ -190,7 +199,7 @@ describe('chatWithCoach', () => {
                   type: 'function',
                   function: {
                     name: 'buscar_exercicios',
-                    arguments: JSON.stringify({ grupos_musculares: ['hamstrings'] }),
+                    arguments: JSON.stringify({ grupos_musculares: ['posterior'] }),
                   },
                 },
               ],
@@ -230,7 +239,11 @@ describe('chatWithCoach', () => {
       makeTools({ searchExercises, rebuildDay })
     )
 
-    expect(searchExercises).toHaveBeenCalledWith({ targets: ['hamstrings'], nameQuery: undefined })
+    expect(searchExercises).toHaveBeenCalledWith({
+      groups: ['posterior'],
+      nameQuery: undefined,
+      beach: undefined,
+    })
     expect(rebuildDay).toHaveBeenCalledWith({
       exerciseIds: ['ex-1'],
       dayLabel: 'Posterior e Glúteos',
@@ -291,9 +304,10 @@ describe('chatWithCoach', () => {
     expect(systemMessage).toContain('wde-1')
     expect(systemMessage).toContain('Supino reto')
     expect(systemMessage).toContain('Nunca use markdown')
-    // o vocabulário de grupos musculares precisa chegar ao prompt, senão a IA
-    // chuta valores de `target` que não existem no banco
-    expect(systemMessage).toContain('hamstrings (posterior de coxa)')
+    // o vocabulário de grupos precisa chegar ao prompt, senão a IA chuta
+    // nomes de grupo que as ferramentas não aceitam
+    expect(systemMessage).toContain('quadriceps')
+    expect(systemMessage).toContain('posterior')
     expect(systemMessage).toContain('6 exercícios por dia')
   })
 

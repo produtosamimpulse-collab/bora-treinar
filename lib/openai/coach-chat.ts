@@ -2,13 +2,8 @@ import OpenAI from 'openai'
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions'
 import type { ChatMessage } from './client'
 import type { SwapOption } from '../plan-engine/exercise-swap'
-import {
-  AVAILABLE_TARGETS,
-  TARGET_LABELS_PT,
-  type ExerciseSearchResult,
-  type RebuildError,
-  type RebuiltDay,
-} from '../plan-engine/rebuild-day'
+import type { CatalogOption, RebuildError, RebuiltDay } from '../plan-engine/rebuild-day'
+import { MUSCLE_GROUPS, BEACH_QUALITIES } from '../plan-engine/movement-catalog'
 
 export type DayContext = {
   goal: string
@@ -30,9 +25,10 @@ export type CoachTools = {
   listAlternatives: (workoutDayExerciseId: string) => Promise<SwapOption[] | null>
   applySwap: (workoutDayExerciseId: string, exerciseId: string) => Promise<SwapToolResult>
   searchExercises: (criteria: {
-    targets?: string[]
+    groups?: string[]
     nameQuery?: string
-  }) => Promise<ExerciseSearchResult[]>
+    beach?: string[]
+  }) => Promise<CatalogOption[]>
   rebuildDay: (input: { exerciseIds: string[]; dayLabel?: string }) => Promise<RebuiltDay | RebuildError>
 }
 
@@ -91,13 +87,19 @@ const TOOLS: ChatCompletionTool[] = [
         properties: {
           grupos_musculares: {
             type: 'array',
-            items: { type: 'string', enum: [...AVAILABLE_TARGETS] },
-            description: 'Grupos musculares desejados, no vocabulário do catálogo',
+            items: { type: 'string', enum: [...MUSCLE_GROUPS] },
+            description: 'Grupos musculares desejados',
           },
           nome: {
             type: 'string',
             description:
               'Trecho do nome do exercício, quando o aluno pedir um exercício específico (ex: "stiff", "leg press", "remada")',
+          },
+          foco_beach_tennis: {
+            type: 'array',
+            items: { type: 'string', enum: [...BEACH_QUALITIES] },
+            description:
+              'Qualidades físicas do beach tennis, quando o aluno pedir treino pro beach: potencia_salto (arranque e salto na areia), core_rotacional (giro pra bater), ombro_estavel (saque e smash), tornozelo_panturrilha (piso instável), preensao (raquete)',
           },
         },
         required: [],
@@ -142,6 +144,8 @@ Você tem duas formas de mexer no treino, e nunca inventa exercício de cabeça 
 
 2. Refazer o treino do dia INTEIRO. Use quando a pessoa não gostar do treino do dia ou quiser treinar outra coisa ("hoje era pernas mas eu quero só posterior", "quero um treino de peito e tríceps", "monta um treino só de glúteo"). Chame buscar_exercicios com os grupos musculares (e/ou o nome, se ela pediu exercício específico), escolha os exercícios que fazem sentido pro que ela pediu e chame refazer_treino_do_dia com os IDs e um título curto pro dia. Monte na ordem certa: exercícios compostos e mais pesados primeiro, isolados depois. Sem pedido diferente, mantenha a mesma quantidade de exercícios que o dia já tinha.
 
+Treino pro beach tennis: quando o aluno pedir um treino pro beach (ou falar de areia, saque, smash, salto, giro pra bater), chame buscar_exercicios com foco_beach_tennis nas qualidades que fazem sentido pro que ele falou, e monte o dia com isso. As qualidades são potencia_salto, core_rotacional, ombro_estavel, tornozelo_panturrilha e preensao. Um dia bom pro beach costuma juntar uma de potência de perna, uma de core rotacional e uma de ombro. É treino de academia com barra e máquina, não é treino na areia.
+
 Quem manda no que treinar é o aluno: se ele pedir um treino de um grupo só, monte esse treino. Séries, repetições e RIR não são escolha sua nem dele nessa conversa - continuam vindo do plano, calculados pelo objetivo e nível. Se o pedido tiver algum risco (ex: treinar de novo, pesado, um grupo que ele acabou de treinar ontem), monte o que ele pediu e comente o risco em uma frase, sem dar sermão.
 
 Depois de refazer o treino, diga em uma ou duas frases o que ficou, listando os exercícios em texto corrido.
@@ -163,9 +167,7 @@ Responda sempre em português do Brasil, de forma direta e objetiva. Nunca use m
     )
     .join(' | ')
 
-  const targetsDescription = AVAILABLE_TARGETS.map(
-    (target) => `${target} (${TARGET_LABELS_PT[target]})`
-  ).join(', ')
+  const groupsDescription = MUSCLE_GROUPS.join(', ')
 
   const contextBlock = `
 
@@ -173,7 +175,7 @@ Contexto real do aluno agora:
 Objetivo: ${context.goal}. Nível: ${context.level}.
 Treino de hoje (${context.dayLabel}): ${exercisesDescription || 'nenhum exercício encontrado'}.
 O plano dele usa ${context.exercisesPerDay} exercícios por dia.
-Grupos musculares que existem no catálogo, com o nome que as ferramentas aceitam: ${targetsDescription}.`
+Grupos musculares que as ferramentas aceitam: ${groupsDescription}.`
 
   return base + contextBlock
 }
@@ -225,6 +227,7 @@ export async function chatWithCoach(
         novo_exercicio_id?: string
         grupos_musculares?: string[]
         nome?: string
+        foco_beach_tennis?: string[]
         exercicio_ids?: string[]
         titulo_do_dia?: string
       }
@@ -248,8 +251,9 @@ export async function chatWithCoach(
         }
       } else if (toolCall.function.name === 'buscar_exercicios') {
         result = await tools.searchExercises({
-          targets: args.grupos_musculares,
+          groups: args.grupos_musculares,
           nameQuery: args.nome,
+          beach: args.foco_beach_tennis,
         })
       } else if (toolCall.function.name === 'refazer_treino_do_dia') {
         const rebuildResult = await tools.rebuildDay({
