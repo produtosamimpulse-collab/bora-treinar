@@ -77,4 +77,6 @@ export const EXERCICIOS: Record<string, Exercicio> = {
   'supino-inclinado-com-halteres': { nome: "Supino inclinado com halteres", grupo: 'peito', midia: '/api/exercises/f943439a-e034-4e65-a65f-92112f57b71b/gif' },
   'supino-reto-com-halteres': { nome: "Supino reto com halteres", grupo: 'peito', midia: '/treinos/supino-reto-com-halteres.gif' },
   'voador-peck-deck': { nome: "Voador (peck deck)", grupo: 'peito', midia: '/api/exercises/9f9eb608-7805-4a7f-85ad-8dda2463fb09/gif' },
+  'agachamento-no-smith': { nome: "Agachamento no Smith", grupo: 'quadriceps', midia: '/api/exercises/a849768f-01e4-48a4-b553-9b8db46f7412/gif' },
+  'agachamento-hack-na-maquina': { nome: "Agachamento hack na máquina", grupo: 'quadriceps', midia: '/api/exercises/06cbea57-c44c-44c1-b1d9-a221b3c5e94a/gif' },
 }

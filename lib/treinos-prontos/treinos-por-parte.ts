@@ -81,11 +81,11 @@ export const TREINOS_POR_PARTE: Treino[] = [
   ]),
   treino('inferiores-quadriceps', 'Quadríceps', 'Inferiores', [
     AQUECIMENTO,
-    serie('agachamento-livre'),
+    serie('agachamento-hack-na-maquina'),
     serie('leg-press-45'),
     serie('cadeira-extensora'),
     serie('afundo-alternado', '12 cada perna'),
-    serie('agachamento-na-polia-baixa'),
+    serie('agachamento-no-smith'),
     serie('recuo-com-halteres', '12 cada perna'),
     serie('agachamento-sumo-com-halter'),
   ]),
