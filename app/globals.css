@@ -51,3 +51,86 @@ body {
   animation-timing-function: ease-in;
   animation-fill-mode: forwards;
 }
+
+.boneca-pula,
+.boneca-braco-esq,
+.boneca-braco-dir,
+.boneca-perna-esq,
+.boneca-perna-dir,
+.boneca-rabo {
+  transform-box: view-box;
+  animation-duration: 0.6s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+.boneca-pula {
+  transform-origin: 70px 210px;
+  animation-name: boneca-pula;
+}
+
+.boneca-braco-esq {
+  transform-origin: 42px 72px;
+  animation-name: boneca-flexiona-esq;
+}
+
+.boneca-braco-dir {
+  transform-origin: 98px 72px;
+  animation-name: boneca-flexiona-dir;
+}
+
+.boneca-perna-esq {
+  transform-origin: 60px 146px;
+  animation-name: boneca-perna-esq;
+}
+
+.boneca-perna-dir {
+  transform-origin: 80px 146px;
+  animation-name: boneca-perna-dir;
+}
+
+.boneca-rabo {
+  transform-origin: 86px 28px;
+  animation-name: boneca-rabo;
+}
+
+@keyframes boneca-pula {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-14px) rotate(4deg); }
+}
+
+@keyframes boneca-flexiona-esq {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-14deg); }
+}
+
+@keyframes boneca-flexiona-dir {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(14deg); }
+}
+
+@keyframes boneca-perna-esq {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(8deg); }
+}
+
+@keyframes boneca-perna-dir {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-8deg); }
+}
+
+@keyframes boneca-rabo {
+  0%, 100% { transform: rotate(-12deg); }
+  50% { transform: rotate(14deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boneca-pula,
+  .boneca-braco-esq,
+  .boneca-braco-dir,
+  .boneca-perna-esq,
+  .boneca-perna-dir,
+  .boneca-rabo {
+    animation: none;
+  }
+}

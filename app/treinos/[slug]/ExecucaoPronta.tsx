@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Confetti from '@/app/components/Confetti'
+import BonecasDancando from '@/app/components/BonecasDancando'
 import { EXERCICIOS, type Exercicio, type ItemTreino } from '@/lib/treinos-prontos'
 import { opcoesDeTroca } from '@/lib/treinos-prontos/trocas'
 import { lerSeriesFeitas, lerTrocas, marcarFeito, salvarSeriesFeitas, salvarTrocas } from '../progresso-local'
@@ -81,6 +82,7 @@ export default function ExecucaoPronta({ slug, titulo, itens: originais }: { slu
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-6 text-center text-foreground">
         <Confetti />
+        <BonecasDancando />
         <p className="text-xs font-medium uppercase tracking-widest text-brand text-outline">Treino concluído</p>
         <h1 className="font-display text-4xl uppercase leading-none sm:text-5xl">Parabéns!</h1>
         <p className="max-w-sm text-sm text-foreground/70">{titulo}</p>
