@@ -79,15 +79,15 @@ export const TREINOS_POR_PARTE: Treino[] = [
     serie('flexora-deitada-com-halter-entre-as-pernas'),
     serie('agachamento-isometrico-com-panturrilha', '30 segundos'),
   ]),
-  treino('inferiores-pernas-2', 'Pernas 2', 'Inferiores', [
+  treino('inferiores-quadriceps', 'Quadríceps', 'Inferiores', [
     AQUECIMENTO,
     serie('agachamento-livre'),
     serie('leg-press-45'),
-    serie('afundo-alternado', '12 cada perna'),
     serie('cadeira-extensora'),
-    serie('stiff-com-halteres'),
-    serie('cadeira-flexora'),
-    serie('elevacao-de-panturrilha-em-pe', '20'),
+    serie('afundo-alternado', '12 cada perna'),
+    serie('agachamento-na-polia-baixa'),
+    serie('recuo-com-halteres', '12 cada perna'),
+    serie('agachamento-sumo-com-halter'),
   ]),
   treino('inferiores-posterior', 'Posterior', 'Inferiores', [
     AQUECIMENTO,

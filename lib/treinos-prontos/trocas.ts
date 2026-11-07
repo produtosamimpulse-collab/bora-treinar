@@ -2,6 +2,7 @@ import { EXERCICIOS } from './exercicios'
 
 const PARECIDOS: Record<string, string[]> = {
   posterior: ['gluteo'],
+  adutores: ['gluteo'],
   panturrilha: ['quadriceps'],
   corpo_todo: ['cardio'],
   cardio: ['corpo_todo'],
