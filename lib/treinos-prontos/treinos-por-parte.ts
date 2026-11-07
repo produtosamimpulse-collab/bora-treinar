@@ -1,9 +1,9 @@
 import type { ItemTreino, Treino } from './tipos'
 
-const ESFORCO = '70% de esforço'
+const ESFORCO = '80% de esforço'
 
-function serie(exercicio: string, repeticoes = '12', series = 3): ItemTreino {
-  return { exercicio, series, repeticoes, carga: ESFORCO, descansoSegundos: 30 }
+function serie(exercicio: string, repeticoes = '12', series = 4): ItemTreino {
+  return { exercicio, series, repeticoes, carga: ESFORCO, descansoSegundos: 45 }
 }
 
 const AQUECIMENTO: ItemTreino = {
@@ -39,6 +39,26 @@ export const TREINOS_POR_PARTE: Treino[] = [
     serie('triceps-invertido-na-polia-com-barra'),
     serie('desenvolvimento-com-faixa-elastica'),
   ]),
+  treino('superiores-peito', 'Peito', 'Superiores', [
+    AQUECIMENTO,
+    serie('supino-reto-com-halteres'),
+    serie('supino-inclinado-com-halteres'),
+    serie('crucifixo-com-halteres'),
+    serie('voador-peck-deck'),
+    serie('crucifixo-inclinado-com-halteres'),
+    serie('crossover-na-polia'),
+    serie('flexao-de-bracos-com-joelhos-apoiados', '15'),
+  ]),
+  treino('superiores-costas', 'Costas', 'Superiores', [
+    AQUECIMENTO,
+    serie('puxada-frontal'),
+    serie('remada-baixa-supinada'),
+    serie('puxada-aberta-na-barra-reta'),
+    serie('remada-curvada-com-halteres'),
+    serie('puxada-fechada-na-barra-reta'),
+    serie('remada-fechada-sentada-com-faixa-elastica', '15'),
+    serie('remada-com-elastico', '15'),
+  ]),
   treino('inferiores-pernas-completo', 'Pernas completo', 'Inferiores', [
     AQUECIMENTO,
     serie('leg-press-45'),
@@ -58,6 +78,26 @@ export const TREINOS_POR_PARTE: Treino[] = [
     serie('extensao-de-perna-sentada-com-caneleira', '40 segundos'),
     serie('flexora-deitada-com-halter-entre-as-pernas'),
     serie('agachamento-isometrico-com-panturrilha', '30 segundos'),
+  ]),
+  treino('inferiores-pernas-2', 'Pernas 2', 'Inferiores', [
+    AQUECIMENTO,
+    serie('agachamento-livre'),
+    serie('leg-press-45'),
+    serie('afundo-alternado', '12 cada perna'),
+    serie('cadeira-extensora'),
+    serie('stiff-com-halteres'),
+    serie('cadeira-flexora'),
+    serie('elevacao-de-panturrilha-em-pe', '20'),
+  ]),
+  treino('inferiores-posterior', 'Posterior', 'Inferiores', [
+    AQUECIMENTO,
+    serie('stiff-com-halteres'),
+    serie('mesa-flexora'),
+    serie('elevacao-pelvica-com-barra'),
+    serie('cadeira-flexora'),
+    serie('flexora-deitada-com-halter-entre-as-pernas'),
+    serie('cadeira-flexora-unilateral', '12 cada perna'),
+    serie('ponte-de-gluteo', '15'),
   ]),
   treino('gluteo', 'Glúteo', 'Glúteo', [
     AQUECIMENTO,
