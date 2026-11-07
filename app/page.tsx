@@ -1,6 +1,15 @@
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getAuthenticatedUserId } from '@/lib/supabase/session'
+import { ORDEM_LAIS, ORDEM_POR_PARTE, agruparTreinos, resumoDoTreino } from '@/lib/treinos-prontos'
+import ListaTreinos from './ListaTreinos'
+
+function blocos(colecao: 'parte' | 'lais', ordem: string[]) {
+  return agruparTreinos(colecao, ordem).map((bloco) => ({
+    grupo: bloco.grupo,
+    treinos: bloco.treinos.map((t) => ({ slug: t.slug, nome: t.nome, resumo: resumoDoTreino(t) })),
+  }))
+}
 
 export default async function Home() {
   const userId = await getAuthenticatedUserId()
@@ -18,48 +27,23 @@ export default async function Home() {
   }
 
   return (
-    <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-background px-6 text-center text-foreground">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/30 blur-[120px]"
-      />
-
-      <div className="relative">
-        <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-4 py-1.5 text-xs font-medium uppercase tracking-widest text-foreground/70">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand" />
-          Seu personal trainer com IA
-        </span>
-
-        <h1 className="font-display text-5xl uppercase leading-[0.95] tracking-tight sm:text-8xl">
-          Bora
-          <br />
-          <span className="text-brand text-outline">Treinar!</span>
+    <main className="mx-auto w-full max-w-3xl flex-1 bg-background px-4 pb-12 pt-8 text-foreground sm:px-8">
+      <header className="mb-6">
+        <h1 className="font-display text-4xl uppercase leading-[0.95] tracking-tight sm:text-6xl">
+          Bora <span className="text-brand text-outline">Treinar!</span>
         </h1>
+      </header>
 
-        <p className="mx-auto mt-6 max-w-md text-base text-foreground/70">
-          Treinos montados, acompanhados e ajustados por IA, mês a mês, do seu jeito.
-        </p>
+      <ListaTreinos porParte={blocos('parte', ORDEM_POR_PARTE)} lais={blocos('lais', ORDEM_LAIS)} />
 
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-          {hasPlan ? (
-            <Link
-              href="/plano"
-              className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black transition-transform hover:scale-105"
-            >
-              Ver meu plano
-              <span aria-hidden>→</span>
-            </Link>
-          ) : (
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-black transition-transform hover:scale-105"
-            >
-              Começar meu plano
-              <span aria-hidden>→</span>
-            </Link>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+      <Link
+        href={hasPlan ? '/plano' : '/onboarding'}
+        prefetch={false}
+        className="mt-10 flex min-h-11 items-center justify-between rounded-2xl border border-border-subtle px-4 py-3 text-sm font-medium text-foreground/70"
+      >
+        {hasPlan ? 'Meu plano montado pela IA' : 'Montar um plano com a IA'}
+        <span aria-hidden>→</span>
+      </Link>
+    </main>
+  )
 }
