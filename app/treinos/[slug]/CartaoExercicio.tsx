@@ -1,13 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { ehTempo, type Exercicio, type ItemTreino } from '@/lib/treinos-prontos'
+import { EXERCICIOS, ehTempo, type Exercicio, type ItemTreino } from '@/lib/treinos-prontos'
 
 type Props = {
   item: ItemTreino & Exercicio
   feitas: number
   parceiro?: string
   onSerie: (serie: number) => void
+  opcoes: string[]
+  trocado: boolean
+  onTrocar: (exercicio: string | null) => void
 }
 
 function prescricao(item: ItemTreino): string {
@@ -18,8 +21,9 @@ function prescricao(item: ItemTreino): string {
   return partes.join(' · ')
 }
 
-export default function CartaoExercicio({ item, feitas, parceiro, onSerie }: Props) {
+export default function CartaoExercicio({ item, feitas, parceiro, onSerie, opcoes, trocado, onTrocar }: Props) {
   const [ampliado, setAmpliado] = useState(false)
+  const [trocando, setTrocando] = useState(false)
   const pronto = feitas >= item.series
 
   return (
@@ -44,12 +48,61 @@ export default function CartaoExercicio({ item, feitas, parceiro, onSerie }: Pro
           {item.observacao && <p className="mt-1 text-xs font-medium">{item.observacao}</p>}
           {parceiro && <p className="mt-1 text-xs font-medium">Alterne com {parceiro}</p>}
         </div>
-        {pronto && (
+        {pronto ? (
           <span aria-hidden className="text-2xl text-brand text-outline">
             ✓
           </span>
+        ) : (
+          (opcoes.length > 0 || trocado) && (
+            <button
+              type="button"
+              onClick={() => setTrocando((v) => !v)}
+              className="min-h-11 shrink-0 rounded-full border border-border-subtle bg-background px-3 text-xs font-semibold uppercase tracking-wide text-foreground/70"
+            >
+              {trocando ? 'Fechar' : 'Trocar'}
+            </button>
+          )
         )}
       </div>
+
+      {trocando && (
+        <ul className="mt-3 space-y-2">
+          {trocado && (
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  onTrocar(null)
+                  setTrocando(false)
+                }}
+                className="flex min-h-11 w-full items-center rounded-xl border border-black bg-brand px-3 text-left text-sm font-semibold text-black"
+              >
+                Voltar ao exercício original
+              </button>
+            </li>
+          )}
+          {opcoes.map((slug) => (
+            <li key={slug}>
+              <button
+                type="button"
+                onClick={() => {
+                  onTrocar(slug)
+                  setTrocando(false)
+                }}
+                className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-border-subtle bg-background p-2 text-left text-sm"
+              >
+                {EXERCICIOS[slug].midia ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={EXERCICIOS[slug].midia!} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg bg-white object-cover" />
+                ) : (
+                  <span className="h-12 w-12 shrink-0 rounded-lg bg-white" />
+                )}
+                {EXERCICIOS[slug].nome}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {ampliado && item.midia && (
         // eslint-disable-next-line @next/next/no-img-element

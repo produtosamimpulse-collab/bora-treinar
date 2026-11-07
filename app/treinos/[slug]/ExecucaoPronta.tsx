@@ -3,15 +3,21 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Confetti from '@/app/components/Confetti'
-import type { Exercicio, ItemTreino } from '@/lib/treinos-prontos'
-import { lerSeriesFeitas, marcarFeito, salvarSeriesFeitas } from '../progresso-local'
+import { EXERCICIOS, type Exercicio, type ItemTreino } from '@/lib/treinos-prontos'
+import { opcoesDeTroca } from '@/lib/treinos-prontos/trocas'
+import { lerSeriesFeitas, lerTrocas, marcarFeito, salvarSeriesFeitas, salvarTrocas } from '../progresso-local'
 import CartaoExercicio from './CartaoExercicio'
 
 type Item = ItemTreino & Exercicio
 type Descanso = { indice: number; restante: number }
 
-export default function ExecucaoPronta({ slug, titulo, itens }: { slug: string; titulo: string; itens: Item[] }) {
+export default function ExecucaoPronta({ slug, titulo, itens: originais }: { slug: string; titulo: string; itens: Item[] }) {
   const [feitas, setFeitas] = useState<Record<number, number>>({})
+  const [trocas, setTrocas] = useState<Record<number, string>>({})
+  const itens: Item[] = originais.map((item, i) => {
+    const troca = trocas[i]
+    return troca && EXERCICIOS[troca] ? { ...item, exercicio: troca, ...EXERCICIOS[troca] } : item
+  })
   const [descanso, setDescanso] = useState<Descanso | null>(null)
   const [concluido, setConcluido] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -19,6 +25,7 @@ export default function ExecucaoPronta({ slug, titulo, itens }: { slug: string; 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFeitas(lerSeriesFeitas(slug))
+    setTrocas(lerTrocas(slug))
   }, [slug])
 
   useEffect(() => {
@@ -35,6 +42,17 @@ export default function ExecucaoPronta({ slug, titulo, itens }: { slug: string; 
 
   const totalSeries = itens.reduce((total, item) => total + item.series, 0)
   const seriesFeitas = itens.reduce((total, item, i) => total + Math.min(feitas[i] ?? 0, item.series), 0)
+
+  function trocar(indice: number, exercicio: string | null) {
+    const proximas = { ...trocas }
+    if (exercicio && exercicio !== originais[indice].exercicio) proximas[indice] = exercicio
+    else delete proximas[indice]
+    setTrocas(proximas)
+    salvarTrocas(slug, proximas)
+    const zeradas = { ...feitas, [indice]: 0 }
+    setFeitas(zeradas)
+    salvarSeriesFeitas(slug, zeradas)
+  }
 
   function concluir() {
     marcarFeito(slug)
@@ -102,6 +120,9 @@ export default function ExecucaoPronta({ slug, titulo, itens }: { slug: string; 
             feitas={feitas[indice] ?? 0}
             parceiro={item.combinado ? itens.find((o, j) => j !== indice && o.combinado === item.combinado)?.nome : undefined}
             onSerie={(serie) => alternarSerie(indice, serie)}
+            opcoes={opcoesDeTroca(item.exercicio, itens.map((o) => o.exercicio))}
+            trocado={Boolean(trocas[indice])}
+            onTrocar={(exercicio) => trocar(indice, exercicio)}
           />
         ))}
       </ol>

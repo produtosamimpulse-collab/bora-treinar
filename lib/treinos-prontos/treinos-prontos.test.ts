@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest'
+import { opcoesDeTroca } from './trocas'
 import { EXERCICIOS, TODOS_OS_TREINOS, agruparTreinos, buscarTreino, ehTempo, resumoDoTreino, ORDEM_LAIS, ORDEM_POR_PARTE } from '.'
+
+describe('trocas de exercício', () => {
+  it('oferece só o mesmo músculo e tira o que já está no treino', () => {
+    const opcoes = opcoesDeTroca('supino-reto-com-halteres', ['crossover-na-polia'])
+    expect(opcoes.length).toBeGreaterThan(0)
+    expect(opcoes).not.toContain('supino-reto-com-halteres')
+    expect(opcoes).not.toContain('crossover-na-polia')
+    expect(opcoes.every((s) => EXERCICIOS[s].grupo === 'peito')).toBe(true)
+  })
+
+  it('completa com músculo parecido quando há poucas opções', () => {
+    const opcoes = opcoesDeTroca('stiff-com-halteres', ['mesa-flexora', 'cadeira-flexora'])
+    expect(opcoes.some((s) => EXERCICIOS[s].grupo === 'gluteo')).toBe(true)
+  })
+
+  it('exercício desconhecido não tem troca', () => {
+    expect(opcoesDeTroca('nao-existe', [])).toEqual([])
+  })
+})
 
 describe('treinos prontos', () => {
   it('todo exercício usado existe no catálogo', () => {

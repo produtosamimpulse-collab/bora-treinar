@@ -36,3 +36,17 @@ export function lerUltimoFeito(slug: string): string | null {
     return null
   }
 }
+
+export function lerTrocas(slug: string): Record<number, string> {
+  try {
+    return JSON.parse(localStorage.getItem(`bt:trocas:${slug}`) ?? '{}')
+  } catch {
+    return {}
+  }
+}
+
+export function salvarTrocas(slug: string, trocas: Record<number, string>): void {
+  try {
+    localStorage.setItem(`bt:trocas:${slug}`, JSON.stringify(trocas))
+  } catch {}
+}
