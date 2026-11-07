@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { EXERCICIOS, ehTempo, type Exercicio, type ItemTreino } from '@/lib/treinos-prontos'
+import { POSICIONAMENTO } from '@/lib/treinos-prontos/posicionamento'
 
 type Props = {
   item: ItemTreino & Exercicio
@@ -25,6 +26,7 @@ export default function CartaoExercicio({ item, feitas, parceiro, onSerie, opcoe
   const [ampliado, setAmpliado] = useState(false)
   const [trocando, setTrocando] = useState(false)
   const pronto = feitas >= item.series
+  const posicao = POSICIONAMENTO[item.exercicio]
 
   return (
     <li className={`rounded-2xl border border-border-subtle bg-surface p-4 ${pronto ? 'opacity-60' : ''}`}>
@@ -45,6 +47,12 @@ export default function CartaoExercicio({ item, feitas, parceiro, onSerie, opcoe
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">{item.nome}</p>
           <p className="mt-0.5 text-xs text-foreground/60">{prescricao(item)}</p>
+          {posicao && (
+            <p className="mt-1.5 text-xs leading-snug text-foreground/80">
+              <span className="font-semibold">{posicao.rotulo}: </span>
+              {posicao.texto}
+            </p>
+          )}
           {item.observacao && <p className="mt-1 text-xs font-medium">{item.observacao}</p>}
           {parceiro && <p className="mt-1 text-xs font-medium">Alterne com {parceiro}</p>}
         </div>

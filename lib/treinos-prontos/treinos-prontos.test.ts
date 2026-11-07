@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { opcoesDeTroca } from './trocas'
+import { POSICIONAMENTO } from './posicionamento'
 import { EXERCICIOS, TODOS_OS_TREINOS, agruparTreinos, buscarTreino, ehTempo, resumoDoTreino, ORDEM_LAIS, ORDEM_POR_PARTE } from '.'
 
 describe('trocas de exercício', () => {
@@ -18,6 +19,16 @@ describe('trocas de exercício', () => {
 
   it('exercício desconhecido não tem troca', () => {
     expect(opcoesDeTroca('nao-existe', [])).toEqual([])
+  })
+})
+
+describe('posicionamento', () => {
+  it('todo exercício do catálogo tem posição, e só ele', () => {
+    expect(Object.keys(POSICIONAMENTO).sort()).toEqual(Object.keys(EXERCICIOS).sort())
+  })
+
+  it('não usa travessão', () => {
+    for (const p of Object.values(POSICIONAMENTO)) expect(p.texto).not.toMatch(/[—–]/)
   })
 })
 
