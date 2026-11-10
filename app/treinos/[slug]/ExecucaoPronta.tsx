@@ -95,7 +95,7 @@ export default function ExecucaoPronta({ slug, titulo, itens: originais }: { slu
         title: `Descanso: ${descanso.restante}s`,
         artist: itens[descanso.indice]?.nome ?? '',
         album: 'Bora Treinar!',
-        artwork: [{ src: '/artwork.png', sizes: '512x512', type: 'image/png' }],
+        artwork: [{ src: '/icon-512.jpg', sizes: '512x512', type: 'image/jpeg' }],
       })
       navigator.mediaSession.playbackState = 'playing'
     }

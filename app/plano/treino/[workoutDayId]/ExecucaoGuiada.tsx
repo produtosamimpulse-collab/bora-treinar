@@ -150,7 +150,7 @@ export default function ExecucaoGuiada({
         title: `Descanso: ${resting.secondsLeft}s`,
         artist: exerciseName,
         album: 'Bora Treinar!',
-        artwork: [{ src: '/artwork.png', sizes: '512x512', type: 'image/png' }],
+        artwork: [{ src: '/icon-512.jpg', sizes: '512x512', type: 'image/jpeg' }],
       })
       navigator.mediaSession.playbackState = 'playing'
     }
