@@ -12,9 +12,18 @@ describe('trocas de exercício', () => {
     expect(opcoes.every((s) => EXERCICIOS[s].grupo === 'peito')).toBe(true)
   })
 
-  it('completa com músculo parecido quando há poucas opções', () => {
+  it('nunca oferece outro músculo, só o mesmo', () => {
     const opcoes = opcoesDeTroca('stiff-com-halteres', ['mesa-flexora', 'cadeira-flexora'])
-    expect(opcoes.some((s) => EXERCICIOS[s].grupo === 'gluteo')).toBe(true)
+    expect(opcoes.length).toBeGreaterThan(0)
+    expect(opcoes.every((s) => EXERCICIOS[s].grupo === 'posterior')).toBe(true)
+  })
+
+  it('quando o treino usa todos do músculo, ainda oferece do mesmo músculo', () => {
+    const peito = Object.keys(EXERCICIOS).filter((s) => EXERCICIOS[s].grupo === 'peito')
+    const opcoes = opcoesDeTroca(peito[0], peito)
+    expect(opcoes.length).toBeGreaterThan(0)
+    expect(opcoes.every((s) => EXERCICIOS[s].grupo === 'peito')).toBe(true)
+    expect(opcoes).not.toContain(peito[0])
   })
 
   it('exercício desconhecido não tem troca', () => {
