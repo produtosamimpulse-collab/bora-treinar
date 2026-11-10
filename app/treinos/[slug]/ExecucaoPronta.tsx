@@ -29,16 +29,83 @@ export default function ExecucaoPronta({ slug, titulo, itens: originais }: { slu
     setTrocas(lerTrocas(slug))
   }, [slug])
 
+  // Encerra o descanso quando o tempo acaba sozinho: toca o alarme (troca a
+  // fonte do MESMO áudio que já estava tocando o silêncio, pra o iPhone
+  // deixar o som sair mesmo com o app em segundo plano) e tenta vibrar
+  // (funciona no Android; o iPhone ignora, por isso o alarme é o sinal).
+  function fecharDescanso(tocarAlarme: boolean) {
+    setDescanso(null)
+    if (tocarAlarme) {
+      const a = audioRef.current
+      if (a) {
+        a.loop = false
+        a.src = '/alarme.wav'
+        a.currentTime = 0
+        a.play().catch(() => {})
+      }
+      try {
+        navigator.vibrate?.([250, 120, 250, 120, 400])
+      } catch {
+        // iPhone não suporta
+      }
+    }
+  }
+
+  // Controles do "mini player" (barra preta no topo do iPhone / tela de
+  // bloqueio): apertar pausar ou parar encerra o descanso.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    const parar = () => fecharDescanso(false)
+    try {
+      navigator.mediaSession.setActionHandler('pause', parar)
+      navigator.mediaSession.setActionHandler('stop', parar)
+    } catch {
+      // nem todo navegador suporta
+    }
+    return () => {
+      try {
+        navigator.mediaSession.setActionHandler('pause', null)
+        navigator.mediaSession.setActionHandler('stop', null)
+      } catch {
+        // ignora
+      }
+    }
+  }, [])
+
   useEffect(() => {
     if (!descanso) {
-      audioRef.current?.pause()
+      const a = audioRef.current
+      if (a && a.src.endsWith('/silence.wav')) a.pause()
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = 'none'
+        navigator.mediaSession.metadata = null
+      }
       return
     }
-    audioRef.current?.play().catch(() => {})
+
+    const a = audioRef.current
+    if (a && !a.src.endsWith('/silence.wav')) {
+      a.src = '/silence.wav'
+      a.loop = true
+    }
+    a?.play().catch(() => {})
+
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: `Descanso: ${descanso.restante}s`,
+        artist: itens[descanso.indice]?.nome ?? '',
+        album: 'Bora Treinar!',
+        artwork: [{ src: '/artwork.png', sizes: '512x512', type: 'image/png' }],
+      })
+      navigator.mediaSession.playbackState = 'playing'
+    }
+
     const timeout = setTimeout(() => {
-      setDescanso((atual) => (!atual || atual.restante <= 1 ? null : { ...atual, restante: atual.restante - 1 }))
+      if (descanso.restante <= 1) fecharDescanso(true)
+      else setDescanso({ ...descanso, restante: descanso.restante - 1 })
     }, 1000)
     return () => clearTimeout(timeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [descanso])
 
   const totalSeries = itens.reduce((total, item) => total + item.series, 0)
@@ -145,7 +212,7 @@ export default function ExecucaoPronta({ slug, titulo, itens: originais }: { slu
           </div>
           <button
             type="button"
-            onClick={() => setDescanso(null)}
+            onClick={() => fecharDescanso(false)}
             className="min-h-11 rounded-full bg-brand px-5 text-xs font-semibold uppercase tracking-wide text-black"
           >
             Pular
